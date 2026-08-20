@@ -11,7 +11,9 @@ def read_pdf(file_path):
     reader = PdfReader(file_path) 
     text = '' 
     for page in reader.pages: 
-        text += page.extract_text() 
+        if page.extract_text() is not None:  # Check if text extraction was successful
+            text += page.extract_text() 
+        
     return text 
 
 def read_docx(file_path):
@@ -22,17 +24,32 @@ def read_docx(file_path):
     return text
        
 
+# now we can pass multiple files 
 def load_document(file_path ):
-    if file_path == None :
+    # list of strings 
+    strings = [] 
+    if not  (len(file_path)   == 0 ) and  file_path[0] ==  None :
         file_path = input("please paste your file path here").strip()
-    file_path= file_path.strip('"')
-    extension = os.path.splitext(file_path)[1].lower() 
-    # we are reading the extension of the given file 
-    if extension == '.txt':
-        return read_txt(file_path)
-    elif extension == '.pdf':
-        return read_pdf(file_path)
-    elif extension == '.docx':
-        return read_docx(file_path)
-    else: 
-        raise ValueError (f"An Unsupported file tpye was passed {extension}")
+        # you can batch upload files 
+    elif  (len(file_path) == 0 ) : 
+        file_path = input("please paste your file path here").strip()   
+
+    # checking for 0 or 1 path 
+    for file_path in file_path : 
+        if not os.path.isfile(file_path) : 
+            raise FileNotFoundError(f"The file {file_path} does not exist.")        
+        # just makesing sure it is not empty 
+        if os.path.isfile(file_path) : 
+            ext = os.path.splitext(file_path)[1].lower() 
+            if ext == ".txt" : 
+                strings.append(read_txt(file_path)) 
+            elif ext == ".pdf" : 
+                strings.append(read_pdf(file_path)) 
+            elif ext == ".docx" : 
+                strings.append(read_docx(file_path)) 
+            else : 
+                raise ValueError("Unsupported file format. Please provide a .txt, .pdf, or .docx file.")
+        else : 
+            raise FileNotFoundError(f"The file {file_path} does not exist.")        
+        # just makesing sure it is not empty 
+    return strings 

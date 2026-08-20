@@ -4,11 +4,13 @@ import os
 from embedder import embed_chunks , populate_index
 from document_loader import load_document
 import numpy as np 
+from config import chunk_size , overlap_size  , file_paths, model_base_url , base_url
 from model import get_client 
 
-test_path = os.getenv("default_path")
-text_string = load_document(test_path) 
-chunks = chunk(text_string,300,40)
+'''
+test_paths = file_paths 
+text_string = load_document(test_paths) 
+chunks = chunk(text_string,chunk_size,overlap_size)
 embed_chunks(chunks)
 embeddings = embed_chunks(chunks)
 index = populate_index(embeddings) 
@@ -41,3 +43,6 @@ response = client.chat.completions.create(
 
 print("The answer to your question is : \n\n")
 print(response.choices[0].message.content)  
+
+'''
+
