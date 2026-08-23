@@ -25,20 +25,35 @@ def populate_index(twodarray): # returns a populated faiss index
 
 def save_embedding_index(index, file_path=None ) : 
     if file_path is None:
+        print("Please provide a file path to save the index.")
         file_path = input("please paste your file path here").strip()
-    if not os.path.isfile(file_path) :
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    final = "embedding_indices/" + file_path
+    clean = final.strip('"')  # Remove any surrounding quotes
+    if not os.path.isfile(clean) :
+        os.makedirs(os.path.dirname(clean), exist_ok=True)
+        faiss.write_index(index,clean)
+        print(f"Index saved successfully at {clean}")
     else :
-        faiss.write_index(index,file_path)
+        faiss.write_index(index,clean)
 
-    return 
+    
 
 def read_embedding_index(file_path=None) : 
+
     if file_path is None:
+        print("Please provide a file path to read the index.")
         file_path = input("please paste your file path here").strip()
-    if not os.path.isfile(file_path) :
-        raise FileNotFoundError(f"The file {file_path} does not exist.")
-    else :
-        index = faiss.read_index(file_path)
+        clean = file_path.strip('"')  # Remove any surrounding quotes
+    if not os.path.isfile(clean) :
+        try:
+        
+            raise FileNotFoundError(f"The file {clean  } does not exist.")
+        
+        except FileNotFoundError as e:
+            print(e)
+            return None 
+        finally: 
+            print("Please make sure to save the index first before trying to read it.")
+    index = faiss.read_index(clean)
     return index    
 

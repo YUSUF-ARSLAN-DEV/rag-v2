@@ -1,26 +1,34 @@
-from chunker import chunk
+from chunker import chunk ,save_chunks 
 import ollama 
 import os 
-from embedder import embed_chunks , populate_index , embed_question
+from embedder import embed_chunks , populate_index , embed_question , read_embedding_index , save_embedding_index , save_embedding_index 
 from document_loader import load_document
 import numpy as np 
 from config import chunk_size , overlap_size  , file_paths,  base_url
 from model import get_client 
 
 
-test_paths = file_paths 
+# re populate the index  only if we did not save it 
+if read_embedding_index(file_path=None)  == None :
+    test_paths = file_paths 
 
-text_string = load_document(test_paths) 
+    text_string = load_document(test_paths) 
 
-chunks = chunk(text_string,chunk_size,overlap_size,test_paths)
-embeddings = embed_chunks(chunks)
-index = populate_index(embeddings) 
+    chunks = chunk(text_string,chunk_size,overlap_size,test_paths)
+    
+    embeddings = embed_chunks(chunks)
+    index = populate_index(embeddings) 
+
+save_embedding_index(index,file_path=None)  # save the index to disk for future use
+save_chunks(chunks,file_path=None)  # save the chunks to disk for future use
 
 # asking the question  then embedding the question 
 question = input("Please write a question regarding the file that you just passed\n make sure that what you are asking about exists in the file\n").strip()
 q_store = question 
 question = [question] # since faiss accepts a 2d arra
 q_embed = embed_question(question)
+
+
 
 
 # Getting the closest 3 chunks  # we use the list of chunks and the index 

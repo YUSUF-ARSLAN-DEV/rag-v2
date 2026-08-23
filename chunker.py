@@ -2,6 +2,7 @@ import tiktoken
 from config import * 
 import os 
 from config import *
+import json 
 
 encoder = tiktoken.get_encoding("cl100k_base") 
 
@@ -10,6 +11,8 @@ encoder = tiktoken.get_encoding("cl100k_base")
 
 # returns a list of dictionary where each dictionary has a key "text"
 #  and the value is the chunked text
+
+
 def chunk(text , chunk_size = 200  , overlap = 50,test_paths = file_paths) :
     # text is a list of strings where each string represents a documentq 
 
@@ -46,3 +49,16 @@ def chunk(text , chunk_size = 200  , overlap = 50,test_paths = file_paths) :
 # now we have chunks for various files basically batch operation 
 
 
+# saving the chunks as JSOn 
+
+def save_chunks(chunks,file_path=None) : 
+    if file_path is None:
+        print("Please provide a file path to save the chunks.")
+        file_path = input("please paste your file path here").strip()
+    final = "chunk_lists/" + file_path
+    clean = final.strip('"')  # Remove any surrounding quotes
+    if not os.path.isfile(clean) :
+        os.makedirs(os.path.dirname(clean), exist_ok=True)
+    with open(clean,"w",encoding="utf-8") as f :
+        json.dump(chunks,f ,ensure_ascii=False)
+        print(f"Chunks saved successfully at {clean}")
