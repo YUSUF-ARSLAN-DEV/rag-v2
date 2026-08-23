@@ -7,12 +7,13 @@ model = SentenceTransformer("all-MiniLM-L6-v2")
 
 def embed_chunks(chunks) :
     # flattening the 2d lists of  tokens 
-    if isinstance(chunks, str):
-        chunks = [[chunks]] # if i is a single string we make a list of strings
-    flat_list_of_tokens = [thetoken for innerlist in chunks for thetoken in innerlist ]
-    list_of_vectors = model.encode(flat_list_of_tokens)
+    text_chunks = [c["text"] for c in chunks ] # extract the text from the chunks
+    list_of_vectors = model.encode(text_chunks,show_progress_bar=True) # returns a list of vectors
     return list_of_vectors # returns n rows , 384 columsn 
 
+def embed_question(question) :
+    question_vector = model.encode(question,show_progress_bar=True) 
+    return question_vector 
 def populate_index(twodarray): # returns a populated faiss index 
 
     d = twodarray.shape[1] # the dimensions of the vector # how many columns 

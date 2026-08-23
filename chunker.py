@@ -1,4 +1,5 @@
 import tiktoken 
+from config import * 
 import os 
 from config import *
 
@@ -9,7 +10,7 @@ encoder = tiktoken.get_encoding("cl100k_base")
 
 # returns a list of dictionary where each dictionary has a key "text"
 #  and the value is the chunked text
-def chunk(text , chunk_size = 200  , overlap = 50 ):
+def chunk(text , chunk_size = 200  , overlap = 50,test_paths = file_paths) :
     # text is a list of strings where each string represents a documentq 
 
 
@@ -30,7 +31,7 @@ def chunk(text , chunk_size = 200  , overlap = 50 ):
         for i in range(0,len(token_list) ,step_size) : # we do not care about the value
             chunk = token_list[i:i+chunk_size ] # numbers aka tokens
             chunk = encoder.decode(chunk) # reverts this bunch of tokens back to a string 
-            chunk = {
+            chunk_dict = {
                 "id":"source_"+str(id)+"chunk_"+str(i)+"__"+str(i+chunk_size),    # unique id for each chunk
                 "text": chunk, 
                 "start_token":i, 
@@ -39,7 +40,7 @@ def chunk(text , chunk_size = 200  , overlap = 50 ):
             }
 
 
-            chunks.append(chunk)  # appending the chunk to the list of chunks
+            chunks.append(chunk_dict)  # appending the chunk to the list of chunks
     return chunks       # a list of of lists 
 
 # now we have chunks for various files basically batch operation 
