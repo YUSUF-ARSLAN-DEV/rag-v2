@@ -62,3 +62,14 @@ def save_chunks(chunks,file_path=None) :
     with open(clean,"w",encoding="utf-8") as f :
         json.dump(chunks,f ,ensure_ascii=False)
         print(f"Chunks saved successfully at {clean}")
+
+
+def read_chunks(file_path=None):
+    if file_path is None:
+        print("Please provide the name of the chunks file that you want to read ")
+        file_path = input("please paste your file path here").strip()
+    final = "chunk_lists/" + file_path
+    clean = final.strip('"')  # Remove any surrounding quotes
+    with open(clean,"r",encoding="utf-8") as f :
+        chunks = json.load(f)
+        return chunks 

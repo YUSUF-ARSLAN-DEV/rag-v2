@@ -43,7 +43,8 @@ def read_embedding_index(file_path=None) :
     if file_path is None:
         print("Please provide a file path to read the index.")
         file_path = input("please paste your file path here").strip()
-        clean = file_path.strip('"')  # Remove any surrounding quotes
+    final = "embedding_indices/"+file_path
+    clean = final.strip('"')  # Remove any surrounding quotes
     if not os.path.isfile(clean) :
         try:
         
