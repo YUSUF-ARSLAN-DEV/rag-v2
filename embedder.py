@@ -14,7 +14,8 @@ def embed_chunks(chunks) :
 def embed_question(question) :
     question_vector = model.encode(question,show_progress_bar=True) 
     return question_vector 
-def populate_index(twodarray): # returns a populated faiss index 
+
+def populate_index(twodarray): # this method  returns a populated faiss index 
 
     d = twodarray.shape[1] # the dimensions of the vector # how many columns 
     index = faiss.IndexFlatL2(d) # 384 dimensions  - aka d 

@@ -1,12 +1,15 @@
 import faiss
 from chunker import chunk ,save_chunks  , read_chunks
 import ollama 
+from  sentence_transformers import SentenceTransformer
 import os 
+import json 
 from embedder import embed_chunks , populate_index , embed_question , read_embedding_index , save_embedding_index , save_embedding_index 
 from document_loader import load_document
 import numpy as np 
 from config import chunk_size , overlap_size  , file_paths,  base_url
 from model import get_client 
+from datasets import load_dataset 
 
 
 
@@ -60,8 +63,8 @@ def askQuestionToAI(q_stack):
 
 
 def manual_initialization_pipeline(): #  chunk and embed manually every single time 
+    
     test_paths = file_paths 
-
     text_string = load_document(test_paths)  # the raw strings 
 
     # strinsg that are now chunked int he format of tokens 
@@ -82,42 +85,56 @@ def automatic_initialization_pipeline(index_file_name , chunk_file_name):
     return index , chunks 
 
     
+def gold_set_load_chunk_and_embed(): 
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+    with open ("squad_gold.json","r", encoding = "utf_8") as f : 
+        pairs = json.load(f) 
+
+    chunks = [pair["context"] for pair in pairs ] # returns a list of strings 
+    embedded = model.encode(chunks) # reutnr a list of vectors 
+    index = faiss.IndexFlatL2(embedded.shape[1])
+    index.add(embedded)
+    # the index have been populated with the chunks 
+
+    question_list = [pair["question"] for pair in pairs ] 
+    # now we have a question list 
+    embedded_questions = model.encode(question_list)
+    # correct tally 
+    hitat1 = 0 
+    missat1 = 0 
+    hitat5  = 0 
+    missat5 = 0
+    for question in embedded_questions : 
+        # testing hit at 1 recall@k1
+        for i, question in enumerate(embedded_questions):
+            _, result_indices = index.search(question.reshape(1, -1), k=5)
+            if result_indices[0][0] == i:
+                hitat1 += 1
+            else :
+                missat1 +=1 
+
+            if i in result_indices[0]:
+                hitat5 += 1
+            else :
+                missat5 +=1 
+    total_recall1 = hitat1+missat1
+    total_recall5 = hitat5 +missat5
+
+    hitat1 =f"Your Hitat1 accuracy is :\n{(hitat1/total_recall1)* 100 }% percent"
+    hitat5 = f"Your Hitat5 accuracy is :\n{(hitat5/total_recall5)* 100 }% percent"
+    print(hitat1)
+    print(hitat5)
+
+
+
 
 
 def main():
-  # 
-  '''
-  index , chunk =  automatic_initialization_pipeline("test1.faiss","chunk1.json")
-  if index == None or chunk == None :
-    index,chunks =  manual_initialization_pipeline()
-    save_chunks(chunks)
-    save_embedding_index(index)  # saving the index and chunks in case that they wer enot saved from the start 
-
-  context , sources_list , question_string = askQuestionToIndex(index,chunk)
-  q_stack = [context,sources_list,question_string]
-  askQuestionToAI(q_stack)
-  '''
-
-  #verifying the golden set # ntoe chunks is a list of dicts
-chunks =  read_chunks("chunk1.json")
-
-target = None 
-for dic in chunks :
-    if dic['id'] =='source_0chunk_10650__10850':
-        target = dic
-
-print(f"The number of existing chunkis is:\n{len(chunks)}")
-
-print("Testinf if chunk with ID:\nsource_0chunk_10650__10850\n contains the answer to this question\nwhat is a pure function according to the book ")
-
-if target != None :
-    print(target)
-else :
-    print("were not able to extract dictionary")
-
-
-main()
+    gold_set_load_chunk_and_embed()
 
 
 
 
+
+
+main() 
