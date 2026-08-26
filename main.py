@@ -1,4 +1,5 @@
 import faiss
+import time 
 from chunker import chunk ,save_chunks  , read_chunks
 import ollama 
 from  sentence_transformers import SentenceTransformer
@@ -8,8 +9,9 @@ from embedder import embed_chunks , populate_index , embed_question , read_embed
 from document_loader import load_document
 import numpy as np 
 from config import chunk_size , overlap_size  , file_paths,  base_url
-from model import get_client 
+from model import get_client  , askQuestionToAI
 from datasets import load_dataset 
+from evaluate import evaluating_embedding_model ,reading_the_golden_set
 
 
 
@@ -33,33 +35,12 @@ def askQuestionToIndex(index,chunks):
     # so the returned index is the same index as of the chunk's index  in the list 
     text_passed_to_AI = "\n\n".join (chunks[k]["text"] for k in indices[0])
     sources = [chunks[k]["source"] for k in indices[0]] # indices is a 2d array 
-    return [text_passed_to_AI , sources,q_string ] 
+    return [text_passed_to_AI , q_string,sources ] 
 
 # [retrived text , sources list , the actual question string ]
 
-def askQuestionToAI(q_stack):
-    refrence_text = q_stack[0]
-    question = q_stack[-1]
-    sources = q_stack[1]
-    client = get_client() # end point we are gonna use to communicate 
-    response = client.chat.completions.create(
-        model="qwen3.5:9b",
-        messages = 
-        [
-            {"role":"system","content":"You are a helpful assistant that answers questions based on the context provided. If the answer is not in the context, say 'I don't know'."},
-            {"role": "user", "content": f"CONTEXT:\n{refrence_text }\n\nQUESTION:\n{question}"}
-        ]
-    )
-        
- 
-
-
-    print("\n\nThe answer to your question is : \n\n")
-    print(response.choices[0].message.content)  
-
-    print("Sources for the answer are : \n\n")
-    for source in sources:
-        print(source)
+# requires text_passed_to_AI;context
+# requires source
 
 
 def manual_initialization_pipeline(): #  chunk and embed manually every single time 
@@ -85,52 +66,24 @@ def automatic_initialization_pipeline(index_file_name , chunk_file_name):
     return index , chunks 
 
     
-def gold_set_load_chunk_and_embed(): 
-    model = SentenceTransformer("all-MiniLM-L6-v2")
-    with open ("squad_gold.json","r", encoding = "utf_8") as f : 
-        pairs = json.load(f) 
-
-    chunks = [pair["context"] for pair in pairs ] # returns a list of strings 
-    embedded = model.encode(chunks) # reutnr a list of vectors 
-    index = faiss.IndexFlatL2(embedded.shape[1])
-    index.add(embedded)
-    # the index have been populated with the chunks 
-
-    question_list = [pair["question"] for pair in pairs ] 
-    # now we have a question list 
-    embedded_questions = model.encode(question_list)
-    # correct tally 
-    hitat1 = 0 
-    missat1 = 0 
-    hitat5  = 0 
-    missat5 = 0
-    for question in embedded_questions : 
-        # testing hit at 1 recall@k1
-        for i, question in enumerate(embedded_questions):
-            _, result_indices = index.search(question.reshape(1, -1), k=5)
-            if result_indices[0][0] == i:
-                hitat1 += 1
-            else :
-                missat1 +=1 
-
-            if i in result_indices[0]:
-                hitat5 += 1
-            else :
-                missat5 +=1 
-    total_recall1 = hitat1+missat1
-    total_recall5 = hitat5 +missat5
-
-    hitat1 =f"Your Hitat1 accuracy is :\n{(hitat1/total_recall1)* 100 }% percent"
-    hitat5 = f"Your Hitat5 accuracy is :\n{(hitat5/total_recall5)* 100 }% percent"
-    print(hitat1)
-    print(hitat5)
 
 
 
 
 
 def main():
-    gold_set_load_chunk_and_embed()
+    questions_embed , index , contexts , question_list  = reading_the_golden_set(False)
+
+    for question in questions_embed :
+       _,indices =  index.search(question.reshape(1,-1) , k=1)  # searching the index 
+       context_piece = contexts[indices[0][0]]
+       question_deencoded = question_list[indices[0][0]] # decoding the question then storing it as a decoded string
+       q_stack = [context_piece,question_deencoded,None]
+       askQuestionToAI(q_stack)
+       time.sleep(10)
+
+    
+
 
 
 

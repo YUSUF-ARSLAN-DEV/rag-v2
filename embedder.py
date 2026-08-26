@@ -57,5 +57,6 @@ def read_embedding_index(file_path=None) :
         finally: 
             print("Please make sure to save the index first before trying to read it.")
     index = faiss.read_index(clean)
-    return index    
+    return index  
+
 
