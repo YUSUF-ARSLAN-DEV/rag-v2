@@ -81,6 +81,7 @@ def main():
        q_stack = [context_piece,question_deencoded,None]
        askQuestionToAI(q_stack)
        time.sleep(10)
+       break 
 
     
 
