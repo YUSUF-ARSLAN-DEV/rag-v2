@@ -27,8 +27,9 @@ def reading_the_golden_set(skip_impossible = True ) : # if skip_impossible is Fa
     question_list = [pair["question"] for pair in pairs   ] 
     # now we have a question list 
     embedded_questions = model.encode(question_list)
+    expected_answers = [pair["answers"]["text"][0] if  pair["answers"]["text"] in pairs else None for pair in pairs  ]
 
-    return embedded_questions , index , contexts ,question_list 
+    return embedded_questions , index , contexts ,question_list , expected_answers 
 def evaluating_embedding_model(): 
 
     # reading the golden set 

@@ -9,7 +9,7 @@ from embedder import embed_chunks , populate_index , embed_question , read_embed
 from document_loader import load_document
 import numpy as np 
 from config import chunk_size , overlap_size  , file_paths,  base_url
-from model import get_client  , askQuestionToAI
+from model import get_client  , askQuestionToAI , ask_AI_TO_EVALUTE_RESPONSE
 from datasets import load_dataset 
 from evaluate import evaluating_embedding_model ,reading_the_golden_set
 
@@ -72,16 +72,47 @@ def automatic_initialization_pipeline(index_file_name , chunk_file_name):
 
 
 def main():
-    questions_embed , index , contexts , question_list  = reading_the_golden_set(False)
-
-    for question in questions_embed :
+    questions_embed , index , contexts , question_list ,expected_answers  = reading_the_golden_set(False)
+    faithful = not_faithful = correct = not_correct = 0
+    for  zindex ,question in enumerate(questions_embed) :
+       
        _,indices =  index.search(question.reshape(1,-1) , k=1)  # searching the index 
        context_piece = contexts[indices[0][0]]
-       question_deencoded = question_list[indices[0][0]] # decoding the question then storing it as a decoded string
+       question_deencoded = question_list[zindex] # decoding the question then storing it as a decoded string
        q_stack = [context_piece,question_deencoded,None]
-       askQuestionToAI(q_stack)
-       time.sleep(10)
-       break 
+       TheAIResponse , client , model_name , refrence_text , question =askQuestionToAI(q_stack,True )
+       is_faithful , is_correct  = ask_AI_TO_EVALUTE_RESPONSE(TheAIResponse,client,model_name , refrence_text,question ,expected_answers[zindex])
+
+       if bool(is_faithful) == True :
+           faithful  +=1 
+       else : 
+            not_faithful +=1 
+       if bool (is_correct) == True :
+           total_correct += 1 
+       else :
+           total_not_correct +=1 
+
+    f_total = faithful + not_faithful
+    c_total = correct + not_correct
+    faithfullness = (faithful / f_total * 100) if f_total else 0
+    accuracy      = (correct  / c_total * 100) if c_total else 0
+
+    print(f"Faiithfullness Is the fact wether the model sticks to the given context when answering a given question and a specific context\nn")
+    print(f"Failthfullness Percentage:\n{faithfullness }\n\n")
+    print(f"Accuracy represents the rate at which the Model's Answer actually matches the correct answer when it comes to meaning Aka does the model answer correctly\n\n")
+    print(f"Accuracy Rate:\n{accuracy}")
+
+          
+           
+           
+
+          
+       
+
+
+
+       
+       
 
     
 
