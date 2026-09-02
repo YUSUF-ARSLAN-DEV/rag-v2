@@ -35,7 +35,7 @@ def askQuestionToAI(q_stack, local=False):
         messages=[
             {
                 "role": "system",
-                "content": "You are a helpful assistant that answers questions based on the context provided. If the answer is not in the context, say 'I don't know'."
+                "content": "You answer strictly and only from the CONTEXT provided below. Do not use any outside or prior knowledge. If the answer is not explicitly stated in the CONTEXT, reply exactly with \"I don't know\" and nothing else. Do not guess, infer beyond the text, or add information the CONTEXT does not contain. Quote or paraphrase only what the CONTEXT says."
             },
             {
                 "role": "user",
