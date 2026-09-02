@@ -1,6 +1,6 @@
 import faiss
 import time 
-from collections import counter 
+from collections import Counter 
 from chunker import chunk ,save_chunks  , read_chunks
 import ollama 
 from  sentence_transformers import SentenceTransformer
@@ -107,8 +107,8 @@ def main():
        # or it is not faithful because it is not hitting - basically figuring out why faithfullness is lower than accuracy 
 
 
-
-    c = counter(( r["hit"], r["faithful"]) for r in rows  )
+    # corss tabulation 
+    c = Counter(( r["hit"], r["faithful"]) for r in rows  )
     f_total = faithful + not_faithful
     c_total = correct + not_correct
     faithfullness = (faithful / f_total * 100) if f_total else 0
