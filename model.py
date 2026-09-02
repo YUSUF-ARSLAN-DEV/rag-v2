@@ -48,12 +48,6 @@ def askQuestionToAI(q_stack, local=False):
     TheAIResponse = response.choices[0].message.content
 
 
-    if sources is not None:
-        print("Sources for the answer are : \n\n")
-        for source in sources:
-            print(source)
-    else:
-        print("No Sources ")
 
     return TheAIResponse , client , model_name , refrence_text , question    # the JSON object the AI returns # passing up the client 
      # so that we do not define it again 
@@ -72,12 +66,13 @@ def ask_AI_TO_EVALUTE_RESPONSE(response , client , model_name,refrence_text , qu
         response_format = {"type":"json_schema", "json_schema":{"name":"THE_JSON_SCHEMA" , "schema":define_LLM_EVALUATION_SCHEMA(0)}}
     )
     EVALUATION_RESULT = json.loads(response.choices[0].message.content)
+
     is_faithful = EVALUATION_RESULT["is_faithful"]
-    print(is_faithful) 
+    reasoning = EVALUATION_RESULT["reasoning"]    
     is_correct = EVALUATION_RESULT["is_correct"]
   
 
-    return is_faithful , is_correct
+    return is_faithful , is_correct , reasoning 
 
 
 

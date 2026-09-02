@@ -27,13 +27,13 @@ def reading_the_golden_set(skip_impossible = True ) : # if skip_impossible is Fa
     question_list = [pair["question"] for pair in pairs   ] 
     # now we have a question list 
     embedded_questions = model.encode(question_list)
-    expected_answers = [pair["answers"]["text"][0] if  pair["answers"]["text"] in pairs else None for pair in pairs  ]
+    expected_answers = [pair["answers"]["text"][0] if  len(pair["answers"]["text"] ) != 0     else None for pair in pairs  ]
 
     return embedded_questions , index , contexts ,question_list , expected_answers 
 def evaluating_embedding_model(): 
 
     # reading the golden set 
-    embedded_questions,index,contexts = reading_the_golden_set()
+    embedded_questions,index,contexts ,question_list , expected_answers  = reading_the_golden_set()
     # correct tally 
     hitat1 = 0 
     missat1 = 0 
@@ -53,10 +53,12 @@ def evaluating_embedding_model():
         if any(contexts[idx]==contexts[i] for idx in result_indices[0]):
             hitat5 += 1
             temp = result_indices[0].tolist()
-            position = [position for position, index in  enumerate(temp) if contexts[index]==contexts[i] ]
+            position = [position for position, indices in  enumerate(temp) if contexts[indices]==contexts[i] ]
             val_index =position[0] # getting the first val aka the first value 
 
             MRR += 1/ ( val_index+1)
+        else : 
+            missat5 +=1 
         
 
         # calculating the  totals
@@ -65,9 +67,14 @@ def evaluating_embedding_model():
     # calculating accuracy measures :  and accuracy measures  
     hitat1accuracy =f"Your Hitat1 accuracy is :\n{(hitat1/total_recall1)* 100 }% percent"
     hitat5accuracy = f"Your Hitat5 accuracy is :\n{(hitat5/total_recall5)* 100 }% percent"
-    MRR_SCORE = f"Your MRR Mean Reciprocal Rank is: {MRR/LEN_QUESTIONS}"
-    LEN_QUESTIONS = f"The total number of questions that were evaluated in this test was:{len(embedded_questions)}"
+    len_question = len(embedded_questions)
+    LEN_QUESTIONS = f"The total number of questions that were evaluated in this test was:{len_question}"
+    MRR_SCORE = f"Your MRR Mean Reciprocal Rank is: {MRR/len_question}"
+    HIT_RATE = hitat5/total_recall5
+    # hit rate is the percentage of questions where at least one correct chunk / vector appeared
     print(hitat1accuracy)
     print(hitat5accuracy)
     print(MRR_SCORE)
     print(LEN_QUESTIONS)
+
+

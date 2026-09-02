@@ -74,6 +74,7 @@ def automatic_initialization_pipeline(index_file_name , chunk_file_name):
 def main():
     questions_embed , index , contexts , question_list ,expected_answers  = reading_the_golden_set(False)
     faithful = not_faithful = correct = not_correct = 0
+    question_count = 0 
     for  zindex ,question in enumerate(questions_embed) :
        
        _,indices =  index.search(question.reshape(1,-1) , k=1)  # searching the index 
@@ -81,16 +82,22 @@ def main():
        question_deencoded = question_list[zindex] # decoding the question then storing it as a decoded string
        q_stack = [context_piece,question_deencoded,None]
        TheAIResponse , client , model_name , refrence_text , question =askQuestionToAI(q_stack,True )
-       is_faithful , is_correct  = ask_AI_TO_EVALUTE_RESPONSE(TheAIResponse,client,model_name , refrence_text,question ,expected_answers[zindex])
-
+       print(f"The AI has answered Question No: {question_count}")
+       is_faithful , is_correct , reasoning   = ask_AI_TO_EVALUTE_RESPONSE(TheAIResponse,client,model_name , refrence_text,question ,expected_answers[zindex])
+       print(f"The AI has evaluated the answer of Question No: {question_count}")
+       print(f"Here is the reasoning behind it: {reasoning}")
        if bool(is_faithful) == True :
            faithful  +=1 
        else : 
             not_faithful +=1 
        if bool (is_correct) == True :
-           total_correct += 1 
+           correct  += 1 
        else :
-           total_not_correct +=1 
+           not_correct +=1 
+
+       question_count +=1 
+
+       if zindex == 10 : break 
 
     f_total = faithful + not_faithful
     c_total = correct + not_correct
@@ -113,13 +120,5 @@ def main():
 
        
        
-
-    
-
-
-
-
-
-
 
 main() 
