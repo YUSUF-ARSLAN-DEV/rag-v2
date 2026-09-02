@@ -19,6 +19,11 @@ def get_client(local=False):
     return client
 
 def askQuestionToAI(q_stack, local=False):
+
+    if local == False : 
+        print("Sending your Queries to the Server we have at work ")
+    else: 
+        print("Asking your local OLLAMA MODEL RUNNING ON YOUR WEAK ASS GPU ")
     refrence_text = q_stack[0]
     question = q_stack[1]
     sources = q_stack[-1]
@@ -26,6 +31,7 @@ def askQuestionToAI(q_stack, local=False):
     model_name = "qwen3.5:9b" if local else os.getenv("LOCAL_SERVER_MODEL_NAME")
     response = client.chat.completions.create(
         model=model_name,
+        temperature = 0 ,
         messages=[
             {
                 "role": "system",
@@ -54,6 +60,8 @@ def askQuestionToAI(q_stack, local=False):
 
 def ask_AI_TO_EVALUTE_RESPONSE(response , client , model_name,refrence_text , question,expected_answer  ): # evaluates a single resposne 
     response_dict = json.loads(response)
+    if expected_answer == None : 
+        expected_answer = "This question has no answer in the context correct = the model refused "
     evaluation_schema = define_LLM_EVALUATION_SCHEMA(1)
     answer  = response_dict["answer"] 
     response = client.chat.completions.create(
@@ -65,6 +73,12 @@ def ask_AI_TO_EVALUTE_RESPONSE(response , client , model_name,refrence_text , qu
         ], 
         response_format = {"type":"json_schema", "json_schema":{"name":"THE_JSON_SCHEMA" , "schema":define_LLM_EVALUATION_SCHEMA(0)}}
     )
+    val_from_AI  = response.choices[0].message.content
+    try : 
+        py_dict = json.loads(val_from_AI) # we break this into two steps so that we can print some of what the AI brought back 
+    except json.JSONDecodeError:
+        return None , None ,  f"JUDGE_PARSE_FAIL: {val_from_AI[:200]!r}"
+    
     EVALUATION_RESULT = json.loads(response.choices[0].message.content)
 
     is_faithful = EVALUATION_RESULT["is_faithful"]
@@ -88,7 +102,7 @@ def define_LLM_EVALUATION_SCHEMA(schema=0):
             "type": "object",
             "properties": {
                 "is_faithful": {"type": "boolean", "description": "True if the answer only uses information from the provided context"},
-                "is_correct": {"type": "boolean", "description": "True if the answer matches the expected answer in terms of meaning"},
+                "is_correct": {"type": "boolean", "description": "True if the answer matches the expected answer in terms of meaning if no correct answer exists in the context , is_correct is True only when the model refuses to answer ( said it doesn't know / not in context ) and false if it made up an answer that is not possible to come up with from the context "},
                 "reasoning": {"type": "string", "description": "Brief Explanation as to why the previous judgements were made"}
             },
             "required": ["is_faithful", "is_correct", "reasoning"]

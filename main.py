@@ -75,15 +75,20 @@ def main():
     questions_embed , index , contexts , question_list ,expected_answers  = reading_the_golden_set(False)
     faithful = not_faithful = correct = not_correct = 0
     question_count = 0 
+    rows = [] 
     for  zindex ,question in enumerate(questions_embed) :
        
        _,indices =  index.search(question.reshape(1,-1) , k=1)  # searching the index 
+       retrieval_hit = indices[0][0] == zindex or contexts[indices[0][0]] == contexts[zindex ] # checking if the correct chunk mapping to the question was retrived 
        context_piece = contexts[indices[0][0]]
        question_deencoded = question_list[zindex] # decoding the question then storing it as a decoded string
        q_stack = [context_piece,question_deencoded,None]
-       TheAIResponse , client , model_name , refrence_text , question =askQuestionToAI(q_stack,True )
+       TheAIResponse , client , model_name , refrence_text , question =askQuestionToAI(q_stack , os.getenv("ASKLOCAL").strip().lower() =="true" )
        print(f"The AI has answered Question No: {question_count}")
        is_faithful , is_correct , reasoning   = ask_AI_TO_EVALUTE_RESPONSE(TheAIResponse,client,model_name , refrence_text,question ,expected_answers[zindex])
+       if is_faithful == None or is_correct == None :
+           print("The Model has returned an empty or truncated resposne here is a part of it:\n{reasoning}")
+           continue 
        print(f"The AI has evaluated the answer of Question No: {question_count}")
        print(f"Here is the reasoning behind it: {reasoning}")
        if bool(is_faithful) == True :
@@ -97,7 +102,7 @@ def main():
 
        question_count +=1 
 
-       if zindex == 10 : break 
+
 
     f_total = faithful + not_faithful
     c_total = correct + not_correct
