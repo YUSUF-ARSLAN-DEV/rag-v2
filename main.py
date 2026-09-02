@@ -1,5 +1,6 @@
 import faiss
 import time 
+from collections import counter 
 from chunker import chunk ,save_chunks  , read_chunks
 import ollama 
 from  sentence_transformers import SentenceTransformer
@@ -101,9 +102,13 @@ def main():
            not_correct +=1 
 
        question_count +=1 
+       rows.append({"question_index":zindex, "hit":retrieval_hit , "faithful":bool(is_faithful)})
+       # rows list is there for us to check if the RAG hits when its faithful or maybe its not faithful desipte hitting 
+       # or it is not faithful because it is not hitting - basically figuring out why faithfullness is lower than accuracy 
 
 
 
+    c = counter(( r["hit"], r["faithful"]) for r in rows  )
     f_total = faithful + not_faithful
     c_total = correct + not_correct
     faithfullness = (faithful / f_total * 100) if f_total else 0
@@ -113,7 +118,7 @@ def main():
     print(f"Failthfullness Percentage:\n{faithfullness }\n\n")
     print(f"Accuracy represents the rate at which the Model's Answer actually matches the correct answer when it comes to meaning Aka does the model answer correctly\n\n")
     print(f"Accuracy Rate:\n{accuracy}")
-
+    print(c)
           
            
            
