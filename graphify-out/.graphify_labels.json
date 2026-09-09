@@ -1,1 +1,12 @@
-{"0": "LLM Answering & Evaluation", "1": "RAG Dependency Stack", "2": "Chunking & Config", "3": "Graphify Tooling Docs", "4": "Document Loading", "5": "Embedding & Index Building", "6": "Persistence Load Path", "7": "Embedding Model Evaluation", "8": "CLI & Evaluation Deps", "9": "Query Embedding Path"}
+{
+  "0": "LLM Answering & Evaluation",
+  "1": "RAG Dependency Stack",
+  "2": "Chunking & Config",
+  "3": "Graphify Tooling Docs",
+  "4": "Document Loading",
+  "5": "Embedding & Index Building",
+  "6": "Persistence Load Path",
+  "7": "Embedding Model Evaluation",
+  "8": "CLI & Evaluation Deps",
+  "9": "Query Embedding Path"
+}

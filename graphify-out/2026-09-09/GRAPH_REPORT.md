@@ -1,18 +1,13 @@
-# Graph Report - rag-v2  (2026-09-09)
+# Graph Report - rag-v2  (2026-08-30)
 
 ## Corpus Check
-- 11 files · ~167,805 words
+- 12 files · ~167,312 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
 - 43 nodes · 72 edges · 10 communities (7 shown, 3 thin omitted)
 - Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 9 edges (avg confidence: 0.77)
-- Token cost: 0 input · 0 output
-
-## Graph Freshness
-- Built from commit: `3d124457`
-- Run `git rev-parse HEAD` and compare to check if the graph is stale.
-- Run `graphify update .` after code changes (no API cost).
+- Token cost: 35,000 input · 3,844 output
 
 ## Community Hubs (Navigation)
 - LLM Answering & Evaluation
@@ -54,8 +49,8 @@
 - None detected.
 
 ## Hyperedges (group relationships)
-- **Graphify Navigation Tooling** — claude_graphify_query_commands, claude_graphify_wiki_index, claude_graph_report, claude_graphify_knowledge_graph [EXTRACTED 0.75]
 - **RAG Ingest-to-Answer Flow** — requirements_document_loaders, requirements_sentence_transformers_embeddings, requirements_faiss_vector_index, requirements_openai_llm_backend [INFERRED 0.75]
+- **Graphify Navigation Tooling** — claude_graphify_query_commands, claude_graphify_wiki_index, claude_graph_report, claude_graphify_knowledge_graph [EXTRACTED 0.75]
 
 ## Communities (10 total, 3 thin omitted)
 
@@ -88,7 +83,7 @@ Cohesion: 0.67
 Nodes (3): HuggingFace Datasets / scikit-learn Evaluation, RAG Retrieval Pipeline, Typer/Rich CLI Framework
 
 ## Knowledge Gaps
-- **5 isolated node(s):** `Ollama Local LLM Backend`, `Tiktoken Token Counting`, `Graphify Wiki Index`, `HuggingFace Datasets / scikit-learn Evaluation`, `Typer/Rich CLI Framework`
+- **5 isolated node(s):** `Graphify Wiki Index`, `Ollama Local LLM Backend`, `Tiktoken Token Counting`, `Typer/Rich CLI Framework`, `HuggingFace Datasets / scikit-learn Evaluation`
   These have ≤1 connection - possible missing edges or undocumented components.
 - **3 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -101,5 +96,5 @@ _Questions this graph is uniquely positioned to answer:_
   _High betweenness centrality (0.011) - this node is a cross-community bridge._
 - **Why does `ask_AI_TO_EVALUTE_RESPONSE()` connect `LLM Answering & Evaluation` to `Chunking & Config`?**
   _High betweenness centrality (0.010) - this node is a cross-community bridge._
-- **What connects `Ollama Local LLM Backend`, `Tiktoken Token Counting`, `Graphify Wiki Index` to the rest of the system?**
+- **What connects `Graphify Wiki Index`, `Ollama Local LLM Backend`, `Tiktoken Token Counting` to the rest of the system?**
   _5 weakly-connected nodes found - possible documentation gaps or missing edges._

@@ -44,7 +44,7 @@
       "file_type": "code",
       "norm_label": "main()",
       "source_file": "main.py",
-      "source_location": "L75"
+      "source_location": "L74"
     },
     {
       "id": "model_ask_ai_to_evalute_response",
@@ -56,7 +56,7 @@
       "file_type": "code",
       "norm_label": "ask_ai_to_evalute_response()",
       "source_file": "model.py",
-      "source_location": "L61"
+      "source_location": "L62"
     },
     {
       "id": "model_askquestiontoai",
@@ -80,7 +80,7 @@
       "file_type": "code",
       "norm_label": "define_llm_evaluation_schema()",
       "source_file": "model.py",
-      "source_location": "L96"
+      "source_location": "L86"
     },
     {
       "id": "model_get_client",
@@ -212,7 +212,7 @@
       "file_type": "code",
       "norm_label": "manual_initialization_pipeline()",
       "source_file": "main.py",
-      "source_location": "L47"
+      "source_location": "L46"
     },
     {
       "id": "chunker_read_chunks",
@@ -248,7 +248,7 @@
       "file_type": "code",
       "norm_label": "automatic_initialization_pipeline()",
       "source_file": "main.py",
-      "source_location": "L64"
+      "source_location": "L63"
     },
     {
       "id": "evaluate_evaluating_embedding_model",
@@ -260,7 +260,7 @@
       "file_type": "code",
       "norm_label": "evaluating_embedding_model()",
       "source_file": "evaluate.py",
-      "source_location": "L33"
+      "source_location": "L32"
     },
     {
       "id": "evaluate_reading_the_golden_set",
@@ -296,7 +296,7 @@
       "file_type": "code",
       "norm_label": "askquestiontoindex()",
       "source_file": "main.py",
-      "source_location": "L26"
+      "source_location": "L25"
     },
     {
       "id": "model",
@@ -378,7 +378,6 @@
     {
       "id": "requirements_document_loaders",
       "label": "PDF/DOCX Document Loaders",
-      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -393,7 +392,6 @@
     {
       "id": "requirements_faiss_vector_index",
       "label": "FAISS Vector Index",
-      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -408,7 +406,6 @@
     {
       "id": "requirements_ollama_llm_backend",
       "label": "Ollama Local LLM Backend",
-      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -423,7 +420,6 @@
     {
       "id": "requirements_openai_llm_backend",
       "label": "OpenAI LLM Backend",
-      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -438,7 +434,6 @@
     {
       "id": "requirements_sentence_transformers_embeddings",
       "label": "Sentence-Transformers Embedding Model",
-      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -453,7 +448,6 @@
     {
       "id": "requirements_tiktoken_tokenization",
       "label": "Tiktoken Token Counting",
-      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -468,7 +462,6 @@
     {
       "id": "claude_graphify_knowledge_graph",
       "label": "Graphify Knowledge Graph",
-      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 3,
@@ -483,7 +476,6 @@
     {
       "id": "claude_graphify_query_commands",
       "label": "Graphify Query/Path/Explain Commands",
-      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 3,
@@ -498,7 +490,6 @@
     {
       "id": "claude_graph_report",
       "label": "GRAPH_REPORT.md",
-      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 3,
@@ -513,7 +504,6 @@
     {
       "id": "claude_graphify_wiki_index",
       "label": "Graphify Wiki Index",
-      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 3,
@@ -528,7 +518,6 @@
     {
       "id": "claude_graphify_update",
       "label": "Graphify AST-only Update",
-      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 3,
@@ -543,7 +532,6 @@
     {
       "id": "requirements_datasets_evaluation",
       "label": "HuggingFace Datasets / scikit-learn Evaluation",
-      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 8,
@@ -558,7 +546,6 @@
     {
       "id": "requirements_rag_retrieval_pipeline",
       "label": "RAG Retrieval Pipeline",
-      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 8,
@@ -573,7 +560,6 @@
     {
       "id": "requirements_typer_cli_framework",
       "label": "Typer/Rich CLI Framework",
-      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 8,
@@ -632,7 +618,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "evaluate.py",
-      "source_location": "L36",
+      "source_location": "L35",
       "weight": 1.0
     },
     {
@@ -644,7 +630,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "main.py",
-      "source_location": "L30",
+      "source_location": "L29",
       "weight": 1.0
     },
     {
@@ -656,7 +642,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "main.py",
-      "source_location": "L65",
+      "source_location": "L64",
       "weight": 1.0
     },
     {
@@ -668,7 +654,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "main.py",
-      "source_location": "L66",
+      "source_location": "L65",
       "weight": 1.0
     },
     {
@@ -680,7 +666,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "main.py",
-      "source_location": "L76",
+      "source_location": "L75",
       "weight": 1.0
     },
     {
@@ -692,7 +678,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "main.py",
-      "source_location": "L87",
+      "source_location": "L82",
       "weight": 1.0
     },
     {
@@ -704,7 +690,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "main.py",
-      "source_location": "L89",
+      "source_location": "L83",
       "weight": 1.0
     },
     {
@@ -716,7 +702,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "main.py",
-      "source_location": "L50",
+      "source_location": "L49",
       "weight": 1.0
     },
     {
@@ -728,7 +714,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "main.py",
-      "source_location": "L53",
+      "source_location": "L52",
       "weight": 1.0
     },
     {
@@ -740,7 +726,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "main.py",
-      "source_location": "L56",
+      "source_location": "L55",
       "weight": 1.0
     },
     {
@@ -752,7 +738,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "main.py",
-      "source_location": "L60",
+      "source_location": "L59",
       "weight": 1.0
     },
     {
@@ -764,7 +750,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "model.py",
-      "source_location": "L65",
+      "source_location": "L64",
       "weight": 1.0
     },
     {
@@ -776,7 +762,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "model.py",
-      "source_location": "L30",
+      "source_location": "L25",
       "weight": 1.0
     },
     {
@@ -788,19 +774,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "model.py",
-      "source_location": "L49",
-      "weight": 1.0
-    },
-    {
-      "source": "main",
-      "target": "document_loader_load_document",
-      "relation": "imports",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "import",
-      "source_file": "main.py",
-      "source_location": "L10",
+      "source_location": "L43",
       "weight": 1.0
     },
     {
@@ -812,7 +786,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "main.py",
-      "source_location": "L13",
+      "source_location": "L12",
       "weight": 1.0
     },
     {
@@ -824,7 +798,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "main.py",
-      "source_location": "L13",
+      "source_location": "L12",
       "weight": 1.0
     },
     {
@@ -836,7 +810,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "main.py",
-      "source_location": "L13",
+      "source_location": "L12",
       "weight": 1.0
     },
     {
@@ -848,7 +822,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "main.py",
-      "source_location": "L15",
+      "source_location": "L14",
       "weight": 1.0
     },
     {
@@ -860,7 +834,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "main.py",
-      "source_location": "L15",
+      "source_location": "L14",
       "weight": 1.0
     },
     {
@@ -872,7 +846,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "main.py",
-      "source_location": "L4",
+      "source_location": "L3",
       "weight": 1.0
     },
     {
@@ -884,7 +858,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "main.py",
-      "source_location": "L4",
+      "source_location": "L3",
       "weight": 1.0
     },
     {
@@ -896,7 +870,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "main.py",
-      "source_location": "L4",
+      "source_location": "L3",
       "weight": 1.0
     },
     {
@@ -908,7 +882,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "main.py",
-      "source_location": "L9",
+      "source_location": "L8",
       "weight": 1.0
     },
     {
@@ -920,7 +894,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "main.py",
-      "source_location": "L9",
+      "source_location": "L8",
       "weight": 1.0
     },
     {
@@ -932,7 +906,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "main.py",
-      "source_location": "L9",
+      "source_location": "L8",
       "weight": 1.0
     },
     {
@@ -944,12 +918,24 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "main.py",
-      "source_location": "L9",
+      "source_location": "L8",
       "weight": 1.0
     },
     {
       "source": "main",
       "target": "embedder_save_embedding_index",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "main.py",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "main",
+      "target": "document_loader_load_document",
       "relation": "imports",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -973,18 +959,6 @@
     },
     {
       "source": "main",
-      "target": "document_loader",
-      "relation": "imports_from",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "import",
-      "source_file": "main.py",
-      "source_location": "L10",
-      "weight": 1.0
-    },
-    {
-      "source": "main",
       "target": "config",
       "relation": "imports_from",
       "_origin": "ast",
@@ -992,7 +966,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "main.py",
-      "source_location": "L12",
+      "source_location": "L11",
       "weight": 1.0
     },
     {
@@ -1004,7 +978,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "main.py",
-      "source_location": "L13",
+      "source_location": "L12",
       "weight": 1.0
     },
     {
@@ -1016,7 +990,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "main.py",
-      "source_location": "L15",
+      "source_location": "L14",
       "weight": 1.0
     },
     {
@@ -1028,12 +1002,24 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "main.py",
-      "source_location": "L4",
+      "source_location": "L3",
       "weight": 1.0
     },
     {
       "source": "main",
       "target": "embedder",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "main.py",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "main",
+      "target": "document_loader",
       "relation": "imports_from",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -1183,7 +1169,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "evaluate.py",
-      "source_location": "L33",
+      "source_location": "L32",
       "weight": 1.0
     },
     {
@@ -1205,7 +1191,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "main.py",
-      "source_location": "L26",
+      "source_location": "L25",
       "weight": 1.0
     },
     {
@@ -1216,7 +1202,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "main.py",
-      "source_location": "L47",
+      "source_location": "L46",
       "weight": 1.0
     },
     {
@@ -1227,7 +1213,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "main.py",
-      "source_location": "L64",
+      "source_location": "L63",
       "weight": 1.0
     },
     {
@@ -1238,7 +1224,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "main.py",
-      "source_location": "L75",
+      "source_location": "L74",
       "weight": 1.0
     },
     {
@@ -1260,7 +1246,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "model.py",
-      "source_location": "L61",
+      "source_location": "L62",
       "weight": 1.0
     },
     {
@@ -1282,14 +1268,13 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "model.py",
-      "source_location": "L96",
+      "source_location": "L86",
       "weight": 1.0
     },
     {
       "source": "claude_graphify_update",
       "target": "claude_graphify_knowledge_graph",
       "relation": "rationale_for",
-      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "CLAUDE.md",
@@ -1300,7 +1285,6 @@
       "source": "claude_graphify_query_commands",
       "target": "claude_graph_report",
       "relation": "references",
-      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "CLAUDE.md",
@@ -1311,7 +1295,6 @@
       "source": "claude_graphify_query_commands",
       "target": "claude_graphify_knowledge_graph",
       "relation": "references",
-      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "CLAUDE.md",
@@ -1322,7 +1305,6 @@
       "source": "requirements_typer_cli_framework",
       "target": "requirements_rag_retrieval_pipeline",
       "relation": "conceptually_related_to",
-      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.65,
       "source_file": "requirements.txt",
@@ -1333,7 +1315,6 @@
       "source": "requirements_document_loaders",
       "target": "requirements_tiktoken_tokenization",
       "relation": "shares_data_with",
-      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.65,
       "source_file": "requirements.txt",
@@ -1344,7 +1325,6 @@
       "source": "requirements_datasets_evaluation",
       "target": "requirements_rag_retrieval_pipeline",
       "relation": "conceptually_related_to",
-      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.75,
       "source_file": "requirements.txt",
@@ -1355,7 +1335,6 @@
       "source": "requirements_document_loaders",
       "target": "requirements_sentence_transformers_embeddings",
       "relation": "shares_data_with",
-      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.75,
       "source_file": "requirements.txt",
@@ -1366,7 +1345,6 @@
       "source": "requirements_faiss_vector_index",
       "target": "requirements_openai_llm_backend",
       "relation": "shares_data_with",
-      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.75,
       "source_file": "requirements.txt",
@@ -1377,7 +1355,6 @@
       "source": "requirements_openai_llm_backend",
       "target": "requirements_ollama_llm_backend",
       "relation": "semantically_similar_to",
-      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.8,
       "source_file": "requirements.txt",
@@ -1388,7 +1365,6 @@
       "source": "claude_graph_report",
       "target": "claude_graphify_knowledge_graph",
       "relation": "references",
-      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.85,
       "source_file": "CLAUDE.md",
@@ -1399,7 +1375,6 @@
       "source": "claude_graphify_wiki_index",
       "target": "claude_graphify_knowledge_graph",
       "relation": "references",
-      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.85,
       "source_file": "CLAUDE.md",
@@ -1410,7 +1385,6 @@
       "source": "requirements_sentence_transformers_embeddings",
       "target": "requirements_faiss_vector_index",
       "relation": "shares_data_with",
-      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.85,
       "source_file": "requirements.txt",
@@ -1448,5 +1422,5 @@
       "source_file": "requirements.txt"
     }
   ],
-  "built_at_commit": "3d12445713ef50a928966aad7902df8832b15a62"
+  "built_at_commit": "c610e21033218cdab1c10d2d9a6fdddf57b4dde0"
 }
