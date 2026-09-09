@@ -10,7 +10,7 @@ from embedder import embed_chunks , populate_index , embed_question , read_embed
 from document_loader import load_document
 import numpy as np 
 from config import chunk_size , overlap_size  , file_paths,  base_url
-from model import get_client  , askQuestionToAI , ask_AI_TO_EVALUTE_RESPONSE
+from model import get_client  , askQuestionToAI , ask_AI_TO_EVALUTE_RESPONSE , askQuestionToClaude , ask_CLAUDE_TO_EVALUATE_RESPONSE
 from datasets import load_dataset 
 from evaluate import evaluating_embedding_model ,reading_the_golden_set
 
@@ -73,7 +73,7 @@ def automatic_initialization_pipeline(index_file_name , chunk_file_name):
 
 
 def main():
-    questions_embed , index , contexts , question_list ,expected_answers  = reading_the_golden_set(False)
+    questions_embed , index , contexts , question_list ,expected_answers , impossibles   = reading_the_golden_set(False)
     faithful = not_faithful = correct = not_correct = 0
     question_count = 0 
     rows = [] 
@@ -86,12 +86,12 @@ def main():
        q_stack = [context_piece,question_deencoded,None]
        TheAIResponse , client , model_name , refrence_text , question =askQuestionToAI(q_stack , os.getenv("ASKLOCAL").strip().lower() =="true" )
        print(f"The AI has answered Question No: {question_count}")
-       is_faithful , is_correct , reasoning   = ask_AI_TO_EVALUTE_RESPONSE(TheAIResponse,client,model_name , refrence_text,question ,expected_answers[zindex])
+       is_faithful , is_correct , reasoning , was_answered  = ask_AI_TO_EVALUTE_RESPONSE(TheAIResponse,client,model_name , refrence_text,question ,expected_answers[zindex])
        if is_faithful == None or is_correct == None :
            print("The Model has returned an empty or truncated resposne here is a part of it:\n{reasoning}")
            continue 
-       print(f"The AI has evaluated the answer of Question No: {question_count}")
-       print(f"Here is the reasoning behind it: {reasoning}")
+       #print(f"The AI has evaluated the answer of Question No: {question_count}") - diagnostic lines 
+       #print(f"Here is the reasoning behind it: {reasoning}") - - diagnostic lines  
        if bool(is_faithful) == True :
            faithful  +=1 
        else : 
@@ -101,25 +101,110 @@ def main():
        else :
            not_correct +=1 
 
-       question_count +=1 
-       rows.append({"question_index":zindex, "hit":retrieval_hit , "faithful":bool(is_faithful)})
+       question_count +=1
+       try :
+           model_answer_text = json.loads(TheAIResponse)["answer"]
+       except Exception :
+           model_answer_text = TheAIResponse
+       rows.append({"question_index":zindex, "hit":retrieval_hit , "faithful":bool(is_faithful),"is_impossible":impossibles[zindex],"Answered":bool(was_answered ),
+                    "question_text":question_deencoded , "context":context_piece , "model_answer":model_answer_text ,
+                    "expected_answer":expected_answers[zindex] , "reasoning":reasoning})
+
+    
        # rows list is there for us to check if the RAG hits when its faithful or maybe its not faithful desipte hitting 
        # or it is not faithful because it is not hitting - basically figuring out why faithfullness is lower than accuracy 
 
 
     # corss tabulation 
     c = Counter(( r["hit"], r["faithful"]) for r in rows  )
+    z = Counter((r["is_impossible"] ,r["faithful"]) for r in rows  ) 
+    f = Counter ( (r["Answered"],r["is_impossible"]) for r in rows )
     f_total = faithful + not_faithful
     c_total = correct + not_correct
-    faithfullness = (faithful / f_total * 100) if f_total else 0
-    accuracy      = (correct  / c_total * 100) if c_total else 0
+    faithfullness = ((faithful / f_total) * 100) if f_total else 0
+    accuracy      = ((correct  / c_total )* 100) if c_total else 0
 
     print(f"Faiithfullness Is the fact wether the model sticks to the given context when answering a given question and a specific context\nn")
     print(f"Failthfullness Percentage:\n{faithfullness }\n\n")
     print(f"Accuracy represents the rate at which the Model's Answer actually matches the correct answer when it comes to meaning Aka does the model answer correctly\n\n")
     print(f"Accuracy Rate:\n{accuracy}")
     print(c)
-          
+    print(z)
+    print(f)
+
+    #diagnose_hallucinations(rows)  # TEMP diagnostic - remove after inspection
+
+
+# TEMP diagnostic method: prints every impossible question the model still answered,
+# so we can eyeball whether it's a real hallucination or a judge mis-evaluation.
+def diagnose_hallucinations(rows):
+    hallucinated = [r for r in rows if r["is_impossible"] and r["Answered"]]
+    print(f"\n\n===== {len(hallucinated)} HALLUCINATED (impossible question answered anyway) =====\n")
+    for n, r in enumerate(hallucinated, 1):
+        print(f"--- {n}. question_index={r['question_index']}  hit={r['hit']}  faithful={r['faithful']} ---")
+        print(f"QUESTION      : {r['question_text']}")
+        print(f"EXPECTED      : {r['expected_answer']}")
+        print(f"MODEL ANSWER  : {r['model_answer']}")
+        print(f"JUDGE REASON  : {r['reasoning']}")
+        print(f"CONTEXT       :\n{r['context']}\n")
+
+
+def Checking_claude(limit=None):
+    # Same retrieval + evaluation loop as main(), but the answering model and the
+    # judge are both claude-sonnet-5. Pass limit=N to only run the first N
+    # questions (keeps API spend small while testing).
+    questions_embed , index , contexts , question_list , expected_answers , impossibles = reading_the_golden_set(False)
+    faithful = not_faithful = correct = not_correct = 0
+    question_count = 0
+    rows = []
+    for zindex , question in enumerate(questions_embed):
+        if limit is not None and zindex >= limit :
+            break
+        _, indices = index.search(question.reshape(1, -1), k=1)
+        retrieval_hit = indices[0][0] == zindex or contexts[indices[0][0]] == contexts[zindex]
+        context_piece = contexts[indices[0][0]]
+        question_deencoded = question_list[zindex]
+        q_stack = [context_piece, question_deencoded, None]
+
+        TheAIResponse , client , model_name , refrence_text , question = askQuestionToClaude(q_stack)
+        print(f"Claude has answered Question No: {question_count}")
+        is_faithful , is_correct , reasoning , was_answered = ask_CLAUDE_TO_EVALUATE_RESPONSE(
+            TheAIResponse, client, model_name, refrence_text, question, expected_answers[zindex])
+        if is_faithful is None or is_correct is None :
+            print(f"Claude judge returned nothing usable:\n{reasoning}")
+            continue
+        print(f"Claude has evaluated Question No: {question_count} -> {reasoning}")
+
+        if bool(is_faithful) : faithful += 1
+        else : not_faithful += 1
+        if bool(is_correct) : correct += 1
+        else : not_correct += 1
+
+        question_count += 1
+        try :
+            model_answer_text = json.loads(TheAIResponse)["answer"]
+        except Exception :
+            model_answer_text = TheAIResponse
+        rows.append({"question_index":zindex, "hit":retrieval_hit , "faithful":bool(is_faithful), "is_impossible":impossibles[zindex], "Answered":bool(was_answered),
+                     "question_text":question_deencoded , "context":context_piece , "model_answer":model_answer_text ,
+                     "expected_answer":expected_answers[zindex] , "reasoning":reasoning})
+
+    c = Counter((r["hit"], r["faithful"]) for r in rows)
+    z = Counter((r["is_impossible"], r["faithful"]) for r in rows)
+    f = Counter((r["Answered"], r["is_impossible"]) for r in rows)
+    f_total = faithful + not_faithful
+    c_total = correct + not_correct
+    faithfullness = ((faithful / f_total) * 100) if f_total else 0
+    accuracy = ((correct / c_total) * 100) if c_total else 0
+
+    print(f"\n===== CLAUDE (claude-sonnet-5) on {len(rows)} questions =====")
+    print(f"Faithfulness Percentage:\n{faithfullness}\n")
+    print(f"Accuracy Rate:\n{accuracy}")
+    print("(hit, faithful)        :", c)
+    print("(is_impossible, faithful):", z)
+    print("(Answered, is_impossible):", f)
+    diagnose_hallucinations(rows)
+
            
            
 
@@ -131,4 +216,5 @@ def main():
        
        
 
-main() 
+#main()
+Checking_claude(limit=5)  # start small - bump the limit (or remove it) once it looks right

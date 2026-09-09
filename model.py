@@ -1,9 +1,22 @@
 from openai import OpenAI
+import anthropic
 from dotenv import load_dotenv
 import os
 import json
 
 load_dotenv()
+
+# Shared prompts - used by both the OpenAI-compatible path and the Claude path
+# so the two backends are tested with identical instructions.
+ANSWERER_SYSTEM_PROMPT = "You answer strictly and only from the CONTEXT provided below. Do not use any outside or prior knowledge. Before answering, thoroughly review the CONTEXT and verify that every entity, name, date, place, and relationship named in the QUESTION actually appears in the CONTEXT and means the same thing. If the QUESTION assumes a fact the CONTEXT does not state (for example a different century, a swapped or reversed relationship, or a person/place not mentioned), treat it as unanswerable. If the answer is explicitly stated in the CONTEXT, set answered to true and put the answer text in answer. If the answer is not explicitly stated in the CONTEXT, set answered to false and leave answer as an empty string. Do not guess, infer beyond the text, or add information the CONTEXT does not contain. Quote or paraphrase only what the CONTEXT says."
+
+JUDGE_SYSTEM_PROMPT = "You are an AI evlauation engineer , of the highest skilll and rank , working on evaluating the reponse of  a model , the model is given a piece of context and a question then it is asked to answer the question using the context , your job is to inspect the question , the context , and make judgement on wether the model answered correctly using the context you will have the schema that you must fill provided to you "
+
+CLAUDE_MODEL_NAME = "claude-sonnet-5"
+
+
+def get_claude_client():
+    return anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 def get_client(local=False):
     if local:
@@ -35,7 +48,7 @@ def askQuestionToAI(q_stack, local=False):
         messages=[
             {
                 "role": "system",
-                "content": "You answer strictly and only from the CONTEXT provided below. Do not use any outside or prior knowledge. If the answer is not explicitly stated in the CONTEXT, reply exactly with \"I don't know\" and nothing else. Do not guess, infer beyond the text, or add information the CONTEXT does not contain. Quote or paraphrase only what the CONTEXT says."
+                "content": ANSWERER_SYSTEM_PROMPT
             },
             {
                 "role": "user",
@@ -63,13 +76,14 @@ def ask_AI_TO_EVALUTE_RESPONSE(response , client , model_name,refrence_text , qu
     if expected_answer == None : 
         expected_answer = "This question has no answer in the context correct = the model refused "
     evaluation_schema = define_LLM_EVALUATION_SCHEMA(1)
-    answer  = response_dict["answer"] 
+    answer  = response_dict["answer"]
+    answered = response_dict["answered"]  # whether the answering model claims it could answer from the context
     response = client.chat.completions.create(
         model  = model_name , 
         messages = 
         [
-            {"role":"system","content":"You are an AI evlauation engineer , of the highest skilll and rank , working on evaluating the reponse of  a model , the model is given a piece of context and a question then it is asked to answer the question using the context , your job is to inspect the question , the context , and make judgement on wether the model answered correctly using the context you will have the schema that you must fill provided to you "}, 
-            {"role":"user","content":f"This is the CONTEXT:\n{refrence_text}\n\n and this is the QUESTION:\n{question}\n\nThis is the model's answer:{answer} and finally this is expected and correct answer for this question:{expected_answer} The is correct part of the output is purely determined on wether the model's answer and the expected correct answer for the question match in terms of meaning "}
+            {"role":"system","content":JUDGE_SYSTEM_PROMPT},
+            {"role":"user","content":build_judge_user_prompt(refrence_text, question, answered, answer, expected_answer)}
         ], 
         response_format = {"type":"json_schema", "json_schema":{"name":"THE_JSON_SCHEMA" , "schema":define_LLM_EVALUATION_SCHEMA(0)}}
     )
@@ -77,7 +91,7 @@ def ask_AI_TO_EVALUTE_RESPONSE(response , client , model_name,refrence_text , qu
     try : 
         py_dict = json.loads(val_from_AI) # we break this into two steps so that we can print some of what the AI brought back 
     except json.JSONDecodeError:
-        return None , None ,  f"JUDGE_PARSE_FAIL: {val_from_AI[:200]!r}"
+        return None , None ,  f"JUDGE_PARSE_FAIL: {val_from_AI[:200]!r}" , answered
     
     EVALUATION_RESULT = json.loads(response.choices[0].message.content)
 
@@ -86,7 +100,7 @@ def ask_AI_TO_EVALUTE_RESPONSE(response , client , model_name,refrence_text , qu
     is_correct = EVALUATION_RESULT["is_correct"]
   
 
-    return is_faithful , is_correct , reasoning 
+    return is_faithful , is_correct , reasoning , answered
 
 
 
@@ -108,13 +122,73 @@ def define_LLM_EVALUATION_SCHEMA(schema=0):
             "required": ["is_faithful", "is_correct", "reasoning"]
         }
         return judge_schema
-    elif schema == 1 : 
+    elif schema == 1 :
         answer_schema =  {
-            "type":"object" , 
+            "type":"object" ,
             "properties":  {
-                "answer": {"type":"string","description":"Just Based on the given context write the answer or if you are unable To extract the answer solely from the context just write False - strictly as False "},
-                "answered": {"type":"boolean","description":"When you are able to answer place a value of True here when not able to place  a value of False here "}
+                "answer": {"type":"string","description":"The answer text extracted solely from the context. If you cannot answer from the context, leave this as an empty string."},
+                "answered": {"type":"boolean","description":"True if you answered the question from the context, False if the context does not contain the answer."}
             },
             "required":["answer","answered"]
         }
-        return answer_schema 
+        return answer_schema
+
+
+def build_judge_user_prompt(refrence_text, question, answered, answer, expected_answer):
+    return (f"This is the CONTEXT:\n{refrence_text}\n\n and this is the QUESTION:\n{question}\n\n"
+            f"The model set answered={answered} (False means it refused / said the context does not contain the answer). "
+            f"This is the model's answer:{answer} and finally this is expected and correct answer for this question:{expected_answer} "
+            f"The is correct part of the output is purely determined on wether the model's answer and the expected correct answer for the question match in terms of meaning . "
+            f"If the expected answer states the question has no answer in the context, is_correct is True only when the model refused (answered=False).")
+
+
+# ---------------------------------------------------------------------------
+# Claude backend - twins of askQuestionToAI / ask_AI_TO_EVALUTE_RESPONSE.
+# Same inputs, same return shapes, so main.py can swap backends without changes.
+# Structured output is done with a forced single-tool call (Anthropic has no
+# response_format=json_schema); the tool input IS the JSON object.
+# ---------------------------------------------------------------------------
+
+def _claude_structured_call(client, system_prompt, user_prompt, schema, tool_name):
+    tool = {"name": tool_name, "description": "Return the structured result.", "input_schema": schema}
+    resp = client.messages.create(
+        model=CLAUDE_MODEL_NAME,
+        max_tokens=1024,
+        system=system_prompt,
+        messages=[{"role": "user", "content": user_prompt}],
+        tools=[tool],
+        tool_choice={"type": "tool", "name": tool_name},
+    )
+    block = next(b for b in resp.content if b.type == "tool_use")
+    return block.input  # dict matching `schema`
+
+
+def askQuestionToClaude(q_stack, local=False):  # local kept for signature parity, ignored
+    print("Sending your Queries to CLAUDE (claude-sonnet-5)")
+    refrence_text = q_stack[0]
+    question = q_stack[1]
+    client = get_claude_client()
+    result = _claude_structured_call(
+        client, ANSWERER_SYSTEM_PROMPT,
+        f"CONTEXT:\n{refrence_text}\n\nQUESTION:\n{question}",
+        define_LLM_EVALUATION_SCHEMA(1), "submit_answer",
+    )
+    TheAIResponse = json.dumps(result)  # keep the downstream contract: a JSON string with answer/answered
+    return TheAIResponse , client , CLAUDE_MODEL_NAME , refrence_text , question
+
+
+def ask_CLAUDE_TO_EVALUATE_RESPONSE(response , client , model_name , refrence_text , question , expected_answer ):
+    response_dict = json.loads(response)
+    if expected_answer == None :
+        expected_answer = "This question has no answer in the context correct = the model refused "
+    answer = response_dict["answer"]
+    answered = response_dict["answered"]
+    try :
+        result = _claude_structured_call(
+            client, JUDGE_SYSTEM_PROMPT,
+            build_judge_user_prompt(refrence_text, question, answered, answer, expected_answer),
+            define_LLM_EVALUATION_SCHEMA(0), "submit_judgement",
+        )
+    except Exception as e :
+        return None , None , f"JUDGE_CALL_FAIL: {e!r}" , answered
+    return result["is_faithful"] , result["is_correct"] , result["reasoning"] , answered

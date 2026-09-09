@@ -19,6 +19,8 @@ def reading_the_golden_set(skip_impossible = True ) : # if skip_impossible is Fa
 
 
     contexts = [pair["context"] for pair in pairs  ] # returns a list of strings 
+    impossibles = [pair["is_impossible"] for pair in pairs ]
+
     embedded = model.encode(contexts) # reutnr a list of vectors 
     index = faiss.IndexFlatL2(embedded.shape[1])
     index.add(embedded)
@@ -29,7 +31,7 @@ def reading_the_golden_set(skip_impossible = True ) : # if skip_impossible is Fa
     embedded_questions = model.encode(question_list)
     expected_answers = [pair["answers"]["text"][0] if  len(pair["answers"]["text"] ) != 0     else None for pair in pairs  ]
 
-    return embedded_questions , index , contexts ,question_list , expected_answers 
+    return embedded_questions , index , contexts ,question_list , expected_answers  , impossibles 
 def evaluating_embedding_model(): 
 
     # reading the golden set 
