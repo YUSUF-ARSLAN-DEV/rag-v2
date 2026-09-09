@@ -217,4 +217,4 @@ def Checking_claude(limit=None):
        
 
 #main()
-Checking_claude(limit=5)  # start small - bump the limit (or remove it) once it looks right
+Checking_claude()  # full dataset
