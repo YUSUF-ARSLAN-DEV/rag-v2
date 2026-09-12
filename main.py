@@ -47,6 +47,27 @@ def automatic_initialization_pipeline(index_file_name, chunk_file_name):
 
 
 # ---------------------------------------------------------------------------
+# Hand-written eval set (eval_set_one.json) — one JSON object per line, e.g.:
+# {"question": "...", "expected_answer": "..." or null, "is_impossible": bool,
+#  "type": "fact|exact_token|multi_chunk|impossible",
+#  "source_snippet": "verbatim quote" or ["quote 1", "quote 2", ...]}
+# ---------------------------------------------------------------------------
+
+def eval_set_loader(path="eval_set_one.json"):
+    questions = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line_number, line in enumerate(f, start=1):
+            line = line.strip()
+            if not line:  # skip blank lines
+                continue
+            try:
+                questions.append(json.loads(line))
+            except json.JSONDecodeError as e:
+                raise ValueError(f"{path}:{line_number} is not valid JSON: {e}") from e
+    return questions
+
+
+# ---------------------------------------------------------------------------
 # Generation eval — shared loop: retrieve -> ask -> judge -> tally -> cross-tab.
 # main() runs it against the server/local model; Checking_claude() against Claude.
 # Both `ask_fn` and `judge_fn` must match askQuestionToAI / ask_AI_TO_EVALUTE_RESPONSE's
