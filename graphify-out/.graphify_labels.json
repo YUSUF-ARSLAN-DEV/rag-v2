@@ -1,1 +1,12 @@
-{"0": "LLM Client & Judge Prompts", "1": "Evaluation & Diagnosis Pipeline", "2": "Embedding & Index", "3": "External Libraries & Backends", "4": "Chunking & Config", "5": "Graphify Tooling", "6": "Document Loading", "7": "RAG Eval Dependencies"}
+{
+  "0": "model.py",
+  "1": "reading_the_golden_set",
+  "2": "embedder.py",
+  "3": "PDF/DOCX Document Loaders",
+  "4": "main.py",
+  "5": "Graphify Knowledge Graph",
+  "6": "load_document",
+  "7": "RAG Retrieval Pipeline",
+  "8": "read_chunks",
+  "9": "embed_question"
+}

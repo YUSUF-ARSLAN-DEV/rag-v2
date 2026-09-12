@@ -8,8 +8,8 @@
   "chunk_lists/chunk1.json": {
     "mtime": 1787471710.596256,
     "seen": 1789207623.251401,
-    "ast_hash": "0b5f3c3b10a9060baff2a8e7419b78ab",
-    "semantic_hash": "0b5f3c3b10a9060baff2a8e7419b78ab"
+    "ast_hash": "",
+    "semantic_hash": ""
   },
   "chunker.py": {
     "mtime": 1787572888.1204853,

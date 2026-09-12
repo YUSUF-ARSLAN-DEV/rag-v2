@@ -1,142 +1,131 @@
+import os
+import json
+from collections import Counter
+
 import faiss
-import time 
-from collections import Counter 
-from chunker import chunk ,save_chunks  , read_chunks
-import ollama 
-from  sentence_transformers import SentenceTransformer
-import os 
-import json 
-from embedder import embed_chunks , populate_index , embed_question , read_embedding_index , save_embedding_index , save_embedding_index 
+import numpy as np
+
+from chunker import chunk, save_chunks, read_chunks
+from embedder import embed_chunks, populate_index, embed_question, read_embedding_index, save_embedding_index
 from document_loader import load_document
-import numpy as np 
-from config import chunk_size , overlap_size  , file_paths,  base_url
-from model import get_client  , askQuestionToAI , ask_AI_TO_EVALUTE_RESPONSE , askQuestionToClaude , ask_CLAUDE_TO_EVALUATE_RESPONSE
-from datasets import load_dataset 
-from evaluate import evaluating_embedding_model ,reading_the_golden_set
+from config import chunk_size, overlap_size, file_paths
+from model import askQuestionToAI, ask_AI_TO_EVALUTE_RESPONSE, askQuestionToClaude, ask_CLAUDE_TO_EVALUATE_RESPONSE
+from evaluate import reading_the_golden_set
 
 
+# ---------------------------------------------------------------------------
+# Interactive RAG pipeline (ask a question about a real document you loaded)
+# ---------------------------------------------------------------------------
+
+def askQuestionToIndex(index, chunks):
+    # asking the question then embedding the question
+    question = input("Please write a question regarding the file that you just passed\n"
+                      "make sure that what you are asking about exists in the file\n").strip()
+    q_final = np.array([embed_question(question)]).astype("float32")
+
+    _, indices = index.search(q_final, 3)  # retrieve the closest 3 chunks
+
+    # chunks maintain the same order as when they were populated into the index,
+    # so the returned index lines up with the chunk's position in the list
+    text_passed_to_AI = "\n\n".join(chunks[k]["text"] for k in indices[0])
+    sources = [chunks[k]["source"] for k in indices[0]]
+    return [text_passed_to_AI, question, sources]  # [context, question, sources]
 
 
-
-
-
-
-
-# returns [compiled string , source , q_string ]
-def askQuestionToIndex(index,chunks):
-    # asking the question  then embedding the question 
-    question = input("Please write a question regarding the file that you just passed\n make sure that what you are asking about exists in the file\n").strip()
-    q_string = question 
-    q_embed = [embed_question(question)]
-    q_final  = np.array(q_embed).astype("float32")  # convert the list to a numpy array and then to float32
-
-    distances , indices =  index.search(q_final,3) # retrive the closest 3 answers 
-
-    # chunks maintain the same order of creation as being populated in the index 
-    # so the returned index is the same index as of the chunk's index  in the list 
-    text_passed_to_AI = "\n\n".join (chunks[k]["text"] for k in indices[0])
-    sources = [chunks[k]["source"] for k in indices[0]] # indices is a 2d array 
-    return [text_passed_to_AI , q_string,sources ] 
-
-# [retrived text , sources list , the actual question string ]
-
-# requires text_passed_to_AI;context
-# requires source
-
-
-def manual_initialization_pipeline(): #  chunk and embed manually every single time 
-    
-    test_paths = file_paths 
-    text_string = load_document(test_paths)  # the raw strings 
-
-    # strinsg that are now chunked int he format of tokens 
-    chunks = chunk(text_string,chunk_size,overlap_size,test_paths)
-
-    # These chunks  now become a list of vectors each with dimensions 1,384 
+def manual_initialization_pipeline():  # chunk and embed from scratch every time
+    text_string = load_document(file_paths)
+    chunks = chunk(text_string, chunk_size, overlap_size, file_paths)
     embeddings = embed_chunks(chunks)
+    index = populate_index(embeddings)
+    return index, chunks
 
-    # Creating and populating the index with the embeddings
 
-    index = populate_index(embeddings) 
-    return index ,chunks 
-
-    
-def automatic_initialization_pipeline(index_file_name , chunk_file_name):
-    index = read_embedding_index(index_file_name )  # read the index from disk if it exists
+def automatic_initialization_pipeline(index_file_name, chunk_file_name):
+    index = read_embedding_index(index_file_name)  # read the index from disk if it exists
     chunks = read_chunks(chunk_file_name)
-    return index , chunks 
-
-    
+    return index, chunks
 
 
+# ---------------------------------------------------------------------------
+# Generation eval — shared loop: retrieve -> ask -> judge -> tally -> cross-tab.
+# main() runs it against the server/local model; Checking_claude() against Claude.
+# Both `ask_fn` and `judge_fn` must match askQuestionToAI / ask_AI_TO_EVALUTE_RESPONSE's
+# signatures and return shapes (see model.py).
+# ---------------------------------------------------------------------------
 
-
-
-def main():
-    questions_embed , index , contexts , question_list ,expected_answers , impossibles   = reading_the_golden_set(False)
+def run_generation_eval(ask_fn, judge_fn, label, limit=None):
+    questions_embed, index, contexts, question_list, expected_answers, impossibles = reading_the_golden_set(False)
     faithful = not_faithful = correct = not_correct = 0
-    question_count = 0 
-    rows = [] 
-    for  zindex ,question in enumerate(questions_embed) :
-       
-       _,indices =  index.search(question.reshape(1,-1) , k=1)  # searching the index 
-       retrieval_hit = indices[0][0] == zindex or contexts[indices[0][0]] == contexts[zindex ] # checking if the correct chunk mapping to the question was retrived 
-       context_piece = contexts[indices[0][0]]
-       question_deencoded = question_list[zindex] # decoding the question then storing it as a decoded string
-       q_stack = [context_piece,question_deencoded,None]
-       TheAIResponse , client , model_name , refrence_text , question =askQuestionToAI(q_stack , os.getenv("ASKLOCAL").strip().lower() =="true" )
-       print(f"The AI has answered Question No: {question_count}")
-       is_faithful , is_correct , reasoning , was_answered  = ask_AI_TO_EVALUTE_RESPONSE(TheAIResponse,client,model_name , refrence_text,question ,expected_answers[zindex])
-       if is_faithful == None or is_correct == None :
-           print("The Model has returned an empty or truncated resposne here is a part of it:\n{reasoning}")
-           continue 
-       #print(f"The AI has evaluated the answer of Question No: {question_count}") - diagnostic lines 
-       #print(f"Here is the reasoning behind it: {reasoning}") - - diagnostic lines  
-       if bool(is_faithful) == True :
-           faithful  +=1 
-       else : 
-            not_faithful +=1 
-       if bool (is_correct) == True :
-           correct  += 1 
-       else :
-           not_correct +=1 
+    question_count = 0
+    rows = []
 
-       question_count +=1
-       try :
-           model_answer_text = json.loads(TheAIResponse)["answer"]
-       except Exception :
-           model_answer_text = TheAIResponse
-       rows.append({"question_index":zindex, "hit":retrieval_hit , "faithful":bool(is_faithful),"is_impossible":impossibles[zindex],"Answered":bool(was_answered ),
-                    "question_text":question_deencoded , "context":context_piece , "model_answer":model_answer_text ,
-                    "expected_answer":expected_answers[zindex] , "reasoning":reasoning})
+    for zindex, question in enumerate(questions_embed):
+        if limit is not None and zindex >= limit:
+            break
 
-    
-       # rows list is there for us to check if the RAG hits when its faithful or maybe its not faithful desipte hitting 
-       # or it is not faithful because it is not hitting - basically figuring out why faithfullness is lower than accuracy 
+        _, indices = index.search(question.reshape(1, -1), k=1)
+        # did the correct chunk get retrieved? (string fallback: SQuAD reuses paragraphs across questions)
+        retrieval_hit = indices[0][0] == zindex or contexts[indices[0][0]] == contexts[zindex]
+        context_piece = contexts[indices[0][0]]
+        question_text = question_list[zindex]
+        q_stack = [context_piece, question_text, None]
+
+        response, client, model_name, refrence_text, question_text = ask_fn(q_stack)
+        print(f"[{label}] answered question {question_count}")
+
+        is_faithful, is_correct, reasoning, was_answered = judge_fn(
+            response, client, model_name, refrence_text, question_text, expected_answers[zindex])
+        if is_faithful is None or is_correct is None:
+            print(f"[{label}] judge returned nothing usable:\n{reasoning}")
+            continue
+        print(f"[{label}] evaluated question {question_count} -> {reasoning}")
+
+        if is_faithful:
+            faithful += 1
+        else:
+            not_faithful += 1
+        if is_correct:
+            correct += 1
+        else:
+            not_correct += 1
+        question_count += 1
+
+        try:
+            model_answer_text = json.loads(response)["answer"]
+        except Exception:
+            model_answer_text = response
+
+        # rows let us cross-tabulate: does the RAG hit when it's faithful, or is it
+        # unfaithful despite hitting, or unfaithful because it missed retrieval?
+        rows.append({
+            "question_index": zindex, "hit": retrieval_hit, "faithful": bool(is_faithful),
+            "is_impossible": impossibles[zindex], "Answered": bool(was_answered),
+            "question_text": question_text, "context": context_piece, "model_answer": model_answer_text,
+            "expected_answer": expected_answers[zindex], "reasoning": reasoning,
+        })
+
+    print_scorecard(label, rows, faithful, not_faithful, correct, not_correct)
+    return rows
 
 
-    # corss tabulation 
-    c = Counter(( r["hit"], r["faithful"]) for r in rows  )
-    z = Counter((r["is_impossible"] ,r["faithful"]) for r in rows  ) 
-    f = Counter ( (r["Answered"],r["is_impossible"]) for r in rows )
+def print_scorecard(label, rows, faithful, not_faithful, correct, not_correct):
     f_total = faithful + not_faithful
     c_total = correct + not_correct
-    faithfullness = ((faithful / f_total) * 100) if f_total else 0
-    accuracy      = ((correct  / c_total )* 100) if c_total else 0
+    faithfulness = (faithful / f_total * 100) if f_total else 0
+    accuracy = (correct / c_total * 100) if c_total else 0
 
-    print(f"Faiithfullness Is the fact wether the model sticks to the given context when answering a given question and a specific context\nn")
-    print(f"Failthfullness Percentage:\n{faithfullness }\n\n")
-    print(f"Accuracy represents the rate at which the Model's Answer actually matches the correct answer when it comes to meaning Aka does the model answer correctly\n\n")
-    print(f"Accuracy Rate:\n{accuracy}")
-    print(c)
-    print(z)
-    print(f)
+    print(f"\n===== {label} on {len(rows)} questions =====")
+    print("Faithfulness = did the answer stick to only the given context (no outside knowledge)?")
+    print(f"Faithfulness: {faithfulness:.1f}%")
+    print("Accuracy = does the answer match the expected answer in meaning?")
+    print(f"Accuracy:     {accuracy:.1f}%")
+    print("(hit, faithful)          :", Counter((r["hit"], r["faithful"]) for r in rows))
+    print("(is_impossible, faithful):", Counter((r["is_impossible"], r["faithful"]) for r in rows))
+    print("(Answered, is_impossible):", Counter((r["Answered"], r["is_impossible"]) for r in rows))
 
-    #diagnose_hallucinations(rows)  # TEMP diagnostic - remove after inspection
 
-
-# TEMP diagnostic method: prints every impossible question the model still answered,
-# so we can eyeball whether it's a real hallucination or a judge mis-evaluation.
+# TEMP diagnostic: prints every impossible question the model answered anyway,
+# so we can eyeball whether it's a real hallucination or a judge/label mis-evaluation.
 def diagnose_hallucinations(rows):
     hallucinated = [r for r in rows if r["is_impossible"] and r["Answered"]]
     print(f"\n\n===== {len(hallucinated)} HALLUCINATED (impossible question answered anyway) =====\n")
@@ -149,72 +138,19 @@ def diagnose_hallucinations(rows):
         print(f"CONTEXT       :\n{r['context']}\n")
 
 
+def main():
+    local = os.getenv("ASKLOCAL", "false").strip().lower() == "true"
+    ask_fn = lambda q_stack: askQuestionToAI(q_stack, local)
+    return run_generation_eval(ask_fn, ask_AI_TO_EVALUTE_RESPONSE, label="QWEN")
+
+
 def Checking_claude(limit=None):
-    # Same retrieval + evaluation loop as main(), but the answering model and the
-    # judge are both claude-sonnet-5. Pass limit=N to only run the first N
-    # questions (keeps API spend small while testing).
-    questions_embed , index , contexts , question_list , expected_answers , impossibles = reading_the_golden_set(False)
-    faithful = not_faithful = correct = not_correct = 0
-    question_count = 0
-    rows = []
-    for zindex , question in enumerate(questions_embed):
-        if limit is not None and zindex >= limit :
-            break
-        _, indices = index.search(question.reshape(1, -1), k=1)
-        retrieval_hit = indices[0][0] == zindex or contexts[indices[0][0]] == contexts[zindex]
-        context_piece = contexts[indices[0][0]]
-        question_deencoded = question_list[zindex]
-        q_stack = [context_piece, question_deencoded, None]
-
-        TheAIResponse , client , model_name , refrence_text , question = askQuestionToClaude(q_stack)
-        print(f"Claude has answered Question No: {question_count}")
-        is_faithful , is_correct , reasoning , was_answered = ask_CLAUDE_TO_EVALUATE_RESPONSE(
-            TheAIResponse, client, model_name, refrence_text, question, expected_answers[zindex])
-        if is_faithful is None or is_correct is None :
-            print(f"Claude judge returned nothing usable:\n{reasoning}")
-            continue
-        print(f"Claude has evaluated Question No: {question_count} -> {reasoning}")
-
-        if bool(is_faithful) : faithful += 1
-        else : not_faithful += 1
-        if bool(is_correct) : correct += 1
-        else : not_correct += 1
-
-        question_count += 1
-        try :
-            model_answer_text = json.loads(TheAIResponse)["answer"]
-        except Exception :
-            model_answer_text = TheAIResponse
-        rows.append({"question_index":zindex, "hit":retrieval_hit , "faithful":bool(is_faithful), "is_impossible":impossibles[zindex], "Answered":bool(was_answered),
-                     "question_text":question_deencoded , "context":context_piece , "model_answer":model_answer_text ,
-                     "expected_answer":expected_answers[zindex] , "reasoning":reasoning})
-
-    c = Counter((r["hit"], r["faithful"]) for r in rows)
-    z = Counter((r["is_impossible"], r["faithful"]) for r in rows)
-    f = Counter((r["Answered"], r["is_impossible"]) for r in rows)
-    f_total = faithful + not_faithful
-    c_total = correct + not_correct
-    faithfullness = ((faithful / f_total) * 100) if f_total else 0
-    accuracy = ((correct / c_total) * 100) if c_total else 0
-
-    print(f"\n===== CLAUDE (claude-sonnet-5) on {len(rows)} questions =====")
-    print(f"Faithfulness Percentage:\n{faithfullness}\n")
-    print(f"Accuracy Rate:\n{accuracy}")
-    print("(hit, faithful)        :", c)
-    print("(is_impossible, faithful):", z)
-    print("(Answered, is_impossible):", f)
+    # limit=N caps the run to the first N questions - keeps API spend small while testing.
+    rows = run_generation_eval(askQuestionToClaude, ask_CLAUDE_TO_EVALUATE_RESPONSE, label="CLAUDE", limit=limit)
     diagnose_hallucinations(rows)
-
-           
-           
-
-          
-       
+    return rows
 
 
-
-       
-       
-
-#main()
-Checking_claude()  # full dataset
+if __name__ == "__main__":
+    # main()
+    Checking_claude()  # full dataset
