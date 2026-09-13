@@ -5,7 +5,7 @@ from embedder import embed_question
 
 if __name__ == "__main__":
     # main()
-    index , chunks = manual_initialization_pipeline(file_paths) # returns a populated index and a list of chunks 
+    index , chunks = manual_initialization_pipeline(file_paths,activate_hybrid ) # returns a populated index and a list of chunks 
     list_of_questions_and_answers = eval_set_loader() 
    
     total_5 = 0 
@@ -30,9 +30,7 @@ if __name__ == "__main__":
                      
         else :
             if any(dictionary["source_snippet"] in s for s in retrieved_chunks ) :
-                print(dictionary["source_snippet"])
-                print(retrieved_chunks[0:-1])
-                break 
+
                 hitat5 +=1 
         total_5 +=1 
 

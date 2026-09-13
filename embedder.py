@@ -1,19 +1,27 @@
 import os
-
+from rank_bm25 import BM250kapi 
 from sentence_transformers  import SentenceTransformer 
 import faiss 
  
 model = SentenceTransformer("BAAI/bge-large-en-v1.5")
 
-def embed_chunks(chunks) :
+def fais_chunks_embedder(chunks) :
     # flattening the 2d lists of  tokens 
     text_chunks = [c["text"] for c in chunks ] # extract the text from the chunks
     list_of_vectors = model.encode(text_chunks,show_progress_bar=True) # returns a list of vectors
     return list_of_vectors # returns n rows , 384 columsn 
 
+def bm25_embedder(chunks,question):  # embeds both the question and the chunks 
+    text_chunks = [c["text"].lower().split() for c in chunks ] # extract the text from the chunks
+    listed_question = question.strip().split()
+    bm25 = BM250kapi(text_chunks) 
+    relevance_score = bm25.get_scores(listed_question)
 def embed_question(question) :
     question_vector = model.encode(question,show_progress_bar=True) 
     return question_vector 
+
+
+     
 
 def populate_index(twodarray): # this method  returns a populated faiss index 
 

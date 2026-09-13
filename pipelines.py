@@ -6,7 +6,7 @@ import faiss
 import numpy as np
 
 from chunker import chunk, save_chunks, read_chunks
-from embedder import embed_chunks, populate_index, embed_question, read_embedding_index, save_embedding_index
+from embedder import fais_chunks_embedder, populate_index, embed_question, read_embedding_index, save_embedding_index
 from document_loader import load_document
 from config import chunk_size, overlap_size, file_paths
 from model import askQuestionToAI, ask_AI_TO_EVALUTE_RESPONSE, askQuestionToClaude, ask_CLAUDE_TO_EVALUATE_RESPONSE
@@ -32,10 +32,10 @@ def askQuestionToIndex(index, chunks):
     return [text_passed_to_AI, question, sources]  # [context, question, sources]
 
 
-def manual_initialization_pipeline(file_paths):  # chunk and embed from scratch every time
+def manual_initialization_pipeline(file_paths,activate_hybrid = False ):  # chunk and embed from scratch every time
     text_string = load_document(file_paths)
     chunks = chunk(text_string, chunk_size, overlap_size, file_paths)
-    embeddings = embed_chunks(chunks)
+    embeddings = fais_chunks_embedder(chunks)
     index = populate_index(embeddings)
     return index, chunks
 
