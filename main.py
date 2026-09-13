@@ -1,7 +1,7 @@
 import numpy as np 
 from pipelines import main, Checking_claude , manual_initialization_pipeline , eval_set_loader
-from config import file_paths , activate_hybrid_embedding
-from embedder import embed_question , bm25_search 
+from config import file_paths , activate_hybrid_embedding , hybdrid_embedding_top_k 
+from embedder import embed_question , bm25_search  , RFF_TOP_PICKS
 
 if __name__ == "__main__":
     # main()
@@ -14,11 +14,17 @@ if __name__ == "__main__":
         question_string = dictionary["question"]
         print(question_string)
         embedded_question = np.array(embed_question(question_string)).reshape(1, -1)
+        _  , indices = index.search(embedded_question,k=hybdrid_embedding_top_k)
         if activate_hybrid_embedding : 
-            bm25_search(bm25 ,question_string) 
-        _  , indices = index.search(embedded_question,k=5)
+            top_k = bm25_search(bm25 ,question_string) 
+            # after getting the bm25 one we start calculating the RFF 
+            retrieved_chunks = RFF_TOP_PICKS(indices[0],top_k,chunks)
+        else : retrieved_chunks = [chunks[i]["text"] for i in indices[0]]
 
-        retrieved_chunks = [chunks[i]["text"] for i in indices[0]]
+
+
+
+
 
         if type(dictionary["source_snippet"]) == list :
             target_hits = len(dictionary["source_snippet"]) 

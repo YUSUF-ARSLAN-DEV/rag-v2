@@ -2,7 +2,7 @@ import os
 from rank_bm25 import BM25Okapi
 from sentence_transformers  import SentenceTransformer
 import faiss
-
+from config import hybdrid_embedding_top_k 
 model = SentenceTransformer("BAAI/bge-large-en-v1.5")
 
 def fais_chunks_embedder(chunks) :
@@ -18,7 +18,7 @@ def build_bm25_index(chunks):
     return BM25Okapi(tokenized_chunks)
 
 # Called once per question, at query time, against the already-built index.
-def bm25_search(bm25, question, k=5):
+def bm25_search(bm25, question, k=hybdrid_embedding_top_k):
     tokenized_question = question.lower().split()  # must match build_bm25_index's tokenizer
     scores = bm25.get_scores(tokenized_question)
     top_k = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:k]
@@ -28,8 +28,27 @@ def embed_question(question) :
     question_vector = model.encode(question,show_progress_bar=True) 
     return question_vector 
 
+def RFF_TOP_PICKS(top_chunks_faiss , top_chunks_bm25,chunks) : 
+    # calculating RFF scored for faiss 
+    rff_faiss =  [1/(s+60) for s, i in enumerate( top_chunks_faiss,start=1 ) ]
+    rff_bm25 = [1/(s+60) for s, i in enumerate(top_chunks_bm25,start = 1) ]
+    master_dict = {} 
+    i= 0 
+    for f , b in zip(top_chunks_faiss,top_chunks_bm25 ): # f,b being indices 
+        if f not in master_dict : 
+            master_dict[f] = rff_faiss[i] 
+        else : 
+            master_dict[f] += rff_faiss[i] 
+        if b not in master_dict : #O(n) btw lolls 
+            master_dict[b] = rff_bm25[i]
+        else : 
+             master_dict[b] += rff_bm25[i]
+        i+=1 
+    # we have built the dictionary 
+    arranged = sorted([k for k in master_dict],key=lambda k:master_dict[k] , reverse = True )
+    return [chunks[index] for index in arranged ] 
+            
 
-     
 
 def populate_index(twodarray): # this method  returns a populated faiss index 
 
