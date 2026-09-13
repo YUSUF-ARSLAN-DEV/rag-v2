@@ -32,7 +32,7 @@ def askQuestionToIndex(index, chunks):
     return [text_passed_to_AI, question, sources]  # [context, question, sources]
 
 
-def manual_initialization_pipeline():  # chunk and embed from scratch every time
+def manual_initialization_pipeline(file_paths):  # chunk and embed from scratch every time
     text_string = load_document(file_paths)
     chunks = chunk(text_string, chunk_size, overlap_size, file_paths)
     embeddings = embed_chunks(chunks)

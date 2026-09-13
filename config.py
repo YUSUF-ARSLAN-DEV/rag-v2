@@ -3,7 +3,7 @@ overlap_size =50  # measured in tokens
 model_name = "qwen3.5:9b"
 base_url="http://localhost:11434/v1"
 file_paths = [
-    r"C:\Users\aonli\Desktop\Books That I am Reading- IN SHA ALLAH\Programming Books\Functional-Programming-in-Scala-1.pdf"
+    r"C:\Users\aonli\Desktop\INTERNSHIP PROJECTS\Independent Learning\RAG LEARNING\rag-v2\sample_sources\healthcare-sample-research-paper.pdf"
    ]
 
 # keep these here for now to save time 
