@@ -1,21 +1,29 @@
 import os
-from rank_bm25 import BM250kapi 
-from sentence_transformers  import SentenceTransformer 
-import faiss 
- 
+from rank_bm25 import BM25Okapi
+from sentence_transformers  import SentenceTransformer
+import faiss
+
 model = SentenceTransformer("BAAI/bge-large-en-v1.5")
 
 def fais_chunks_embedder(chunks) :
-    # flattening the 2d lists of  tokens 
+    # flattening the 2d lists of  tokens
     text_chunks = [c["text"] for c in chunks ] # extract the text from the chunks
     list_of_vectors = model.encode(text_chunks,show_progress_bar=True) # returns a list of vectors
-    return list_of_vectors # returns n rows , 384 columsn 
+    return list_of_vectors # returns n rows , 384 columsn
 
-def bm25_embedder(chunks,question):  # embeds both the question and the chunks 
-    text_chunks = [c["text"].lower().split() for c in chunks ] # extract the text from the chunks
-    listed_question = question.strip().split()
-    bm25 = BM250kapi(text_chunks) 
-    relevance_score = bm25.get_scores(listed_question)
+# BM25 is built ONCE at ingest time, from the chunks only - there is no "the question"
+# yet at that point (many different questions get asked later, one at a time).
+def build_bm25_index(chunks):
+    tokenized_chunks = [c["text"].lower().split() for c in chunks]  # same tokenizer used at query time
+    return BM25Okapi(tokenized_chunks)
+
+# Called once per question, at query time, against the already-built index.
+def bm25_search(bm25, question, k=5):
+    tokenized_question = question.lower().split()  # must match build_bm25_index's tokenizer
+    scores = bm25.get_scores(tokenized_question)
+    top_k = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:k]
+    return top_k, [scores[i] for i in top_k]  # chunk indices + their BM25 scores, best first
+
 def embed_question(question) :
     question_vector = model.encode(question,show_progress_bar=True) 
     return question_vector 

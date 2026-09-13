@@ -5,7 +5,7 @@ from embedder import embed_question
 
 if __name__ == "__main__":
     # main()
-    index , chunks = manual_initialization_pipeline(file_paths,activate_hybrid ) # returns a populated index and a list of chunks 
+    index , chunks , bm25 = manual_initialization_pipeline(file_paths, activate_hybrid=True) # returns a populated FAISS index, the chunks, and a BM25 index
     list_of_questions_and_answers = eval_set_loader() 
    
     total_5 = 0 
