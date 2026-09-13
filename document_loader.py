@@ -1,5 +1,6 @@
-from pypdf import PdfReader 
-import os 
+from pypdf import PdfReader
+import os
+import re
 from docx import Document
 
 def read_txt(filepath): 
@@ -8,13 +9,16 @@ def read_txt(filepath):
 
 
 def read_pdf(file_path):
-    reader = PdfReader(file_path) 
-    text = '' 
-    for page in reader.pages: 
-        if page.extract_text() is not None:  # Check if text extraction was successful
-            text += page.extract_text() 
-        
-    return text 
+    reader = PdfReader(file_path)
+    text = ''
+    for page in reader.pages:
+        page_text = page.extract_text()
+        if page_text is not None:  # Check if text extraction was successful
+            # collapse PDF line-wrap newlines/whitespace runs to a single space, so
+            # extracted text matches plainly-transcribed quotes (e.g. eval set snippets)
+            text += re.sub(r'\s+', ' ', page_text) + ' '
+
+    return text
 
 def read_docx(file_path):
     doc = Document(file_path)

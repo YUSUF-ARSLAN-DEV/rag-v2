@@ -30,6 +30,9 @@ if __name__ == "__main__":
                      
         else :
             if any(dictionary["source_snippet"] in s for s in retrieved_chunks ) :
+                print(dictionary["source_snippet"])
+                print(retrieved_chunks[0:-1])
+                break 
                 hitat5 +=1 
         total_5 +=1 
 
