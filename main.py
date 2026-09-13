@@ -1,11 +1,11 @@
 import numpy as np 
 from pipelines import main, Checking_claude , manual_initialization_pipeline , eval_set_loader
-from config import file_paths 
-from embedder import embed_question
+from config import file_paths , activate_hybrid_embedding
+from embedder import embed_question , bm25_search 
 
 if __name__ == "__main__":
     # main()
-    index , chunks , bm25 = manual_initialization_pipeline(file_paths, activate_hybrid=True) # returns a populated FAISS index, the chunks, and a BM25 index
+    index , chunks , bm25 = manual_initialization_pipeline(file_paths,activate_hybrid_embedding) # returns a populated FAISS index, the chunks, and a BM25 index
     list_of_questions_and_answers = eval_set_loader() 
    
     total_5 = 0 
@@ -14,6 +14,8 @@ if __name__ == "__main__":
         question_string = dictionary["question"]
         print(question_string)
         embedded_question = np.array(embed_question(question_string)).reshape(1, -1)
+        if activate_hybrid_embedding : 
+            bm25_search(bm25 ,question_string) 
         _  , indices = index.search(embedded_question,k=5)
 
         retrieved_chunks = [chunks[i]["text"] for i in indices[0]]
