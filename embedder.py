@@ -1,10 +1,10 @@
 import os
 from rank_bm25 import BM25Okapi
-from sentence_transformers  import SentenceTransformer
+from sentence_transformers  import SentenceTransformer , CrossEncoder 
 import faiss
-from config import hybdrid_embedding_top_k 
+from config import hybdrid_embedding_top_k  ,c_rff_value 
 model = SentenceTransformer("BAAI/bge-large-en-v1.5")
-
+reranker_model = CrossEncoder("BAAI/bge-reranker-base")
 def fais_chunks_embedder(chunks) :
     # flattening the 2d lists of  tokens
     text_chunks = [c["text"] for c in chunks ] # extract the text from the chunks
@@ -30,8 +30,8 @@ def embed_question(question) :
 
 def RFF_TOP_PICKS(top_chunks_faiss , top_chunks_bm25,chunks) : 
     # calculating RFF scored for faiss 
-    rff_faiss =  [1/(s+60) for s, i in enumerate( top_chunks_faiss,start=1 ) ]
-    rff_bm25 = [1/(s+60) for s, i in enumerate(top_chunks_bm25,start = 1) ]
+    rff_faiss =  [1/(s+c_rff_value) for s, i in enumerate( top_chunks_faiss,start=1 ) ]
+    rff_bm25 = [1/(s+c_rff_value) for s, i in enumerate(top_chunks_bm25,start = 1) ]
     master_dict = {} 
     i= 0 
     for f , b in zip(top_chunks_faiss,top_chunks_bm25 ): # f,b being indices 
@@ -46,8 +46,15 @@ def RFF_TOP_PICKS(top_chunks_faiss , top_chunks_bm25,chunks) :
         i+=1 
     # we have built the dictionary 
     arranged = sorted([k for k in master_dict],key=lambda k:master_dict[k] , reverse = True )
-    return [chunks[index] for index in arranged ] 
+    return [chunks[index]["text"] for index in arranged ] 
             
+def reranker(question , chunks, k=5 ) :
+    scores = reranker_model.predict(  [  (question , chunk)  for chunk in chunks  ] ) 
+    # building the combined list  
+
+    combined = [(chunk,score) for chunk ,score in zip(chunks,scores )]
+    arranged = sorted(combined , key= lambda tup :tup[1] , reverse = True )[:k]
+    return arranged 
 
 
 def populate_index(twodarray): # this method  returns a populated faiss index 

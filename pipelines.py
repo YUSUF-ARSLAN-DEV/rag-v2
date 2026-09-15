@@ -9,7 +9,7 @@ from chunker import chunk, save_chunks, read_chunks
 from embedder import fais_chunks_embedder, populate_index, embed_question, read_embedding_index, save_embedding_index , build_bm25_index, bm25_search
 from document_loader import load_document
 from config import chunk_size, overlap_size, file_paths
-from model import askQuestionToAI, ask_AI_TO_EVALUTE_RESPONSE, askQuestionToClaude, ask_CLAUDE_TO_EVALUATE_RESPONSE
+from model import askQuestionToAI, ask_AI_TO_EVALUTE_RESPONSE, askQuestionToClaude, ask_CLAUDE_TO_EVALUATE_RESPONSE , enhancing_chunks
 from evaluate import reading_the_golden_set
 
 
@@ -32,15 +32,18 @@ def askQuestionToIndex(index, chunks):
     return [text_passed_to_AI, question, sources]  # [context, question, sources]
 
 
-def manual_initialization_pipeline(file_paths, activate_hybrid=False):  # chunk and embed from scratch every time
+def manual_initialization_pipeline(file_paths, activate_hybrid=False,activate_enhancement=False ):  # chunk and embed from scratch every time
     text_string = load_document(file_paths)
     chunks = chunk(text_string, chunk_size, overlap_size, file_paths)
-    embeddings = fais_chunks_embedder(chunks)
-    index = populate_index(embeddings)
 
+    if activate_enhancement : 
+         for i in range(len(chunks)):
+            chunks[i]["text"] = enhancing_chunks(chunks[i], text_string) + " " + chunks[i]["text"]
     # bm25 is built once here (ingest time) from chunks only - querying it with an
     # actual question happens later, per-question, via bm25_search(bm25, question).
     bm25 = build_bm25_index(chunks) if activate_hybrid else None
+    embeddings = fais_chunks_embedder(chunks)
+    index = populate_index(embeddings)
 
     return index, chunks, bm25  # bm25 is None when activate_hybrid=False - always 3 values
 

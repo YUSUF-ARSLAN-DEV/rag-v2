@@ -1,5 +1,7 @@
 from openai import OpenAI
+from document_loader import load_document
 import anthropic
+from config import enhancement_source_file_path 
 from dotenv import load_dotenv
 import os
 import json
@@ -132,6 +134,17 @@ def define_LLM_EVALUATION_SCHEMA(schema=0):
             "required":["answer","answered"]
         }
         return answer_schema
+    elif schema == 2 : 
+        CLAUDE_ANSWER_SCHEMA  =  { 
+            "type":"object" , 
+            "properties" :  
+            {
+                "context_blurb" : {"type":"string" , "description":"A 1-2 sentence blurb situating this chunk within the document: what topic/section it's from, with any vague references resolved. Do not summarize the chunk itself, do not add information the document doesn't state."}
+
+            } , 
+            "required" : ["context_blurb"]
+        }
+        return CLAUDE_ANSWER_SCHEMA 
 
 
 def build_judge_user_prompt(refrence_text, question, answered, answer, expected_answer):
@@ -192,3 +205,19 @@ def ask_CLAUDE_TO_EVALUATE_RESPONSE(response , client , model_name , refrence_te
     except Exception as e :
         return None , None , f"JUDGE_CALL_FAIL: {e!r}" , answered
     return result["is_faithful"] , result["is_correct"] , result["reasoning"] , answered
+
+
+ # since it returns a list of string not simply one string 
+
+def enhancing_chunks(chunk,doc_text,file_path=enhancement_source_file_path ):
+    enhancment_schema = define_LLM_EVALUATION_SCHEMA(2)
+    user_prompt = [
+        {"type": "text", "text": f"Here is the full DOCUMENT for context:\n{doc_text[0]}", "cache_control": {"type": "ephemeral"}},
+        {"type": "text", "text": f"---\n\nHere is the specific CHUNK...\n{chunk['text']}\n\nWrite the blurb now."}
+    ]
+    
+    enhancement_system_prompt = "You are given a full document and one chunk extracted from it. Write a short blurb (1-2 sentences) that situates this chunk within the document - what section or topic it is from, with any vague references (like 'this study' or 'the program') resolved using information elsewhere in the document. The purpose is to make the chunk easier to find in a search index when it actually contains the answer to a question. Use only information explicitly stated in the document - do not guess or add outside knowledge. Do not summarize or repeat the chunk's own content."
+    client = get_claude_client() 
+    response = _claude_structured_call(client ,enhancement_system_prompt, user_prompt , enhancment_schema , "submit_chunk_context") 
+    return response["context_blurb"]
+

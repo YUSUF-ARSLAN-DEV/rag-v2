@@ -1,13 +1,14 @@
 import numpy as np 
 from pipelines import main, Checking_claude , manual_initialization_pipeline , eval_set_loader
-from config import file_paths , activate_hybrid_embedding , hybdrid_embedding_top_k 
-from embedder import embed_question , bm25_search  , RFF_TOP_PICKS
+from config import file_paths , activate_hybrid_embedding , hybdrid_embedding_top_k  , enhancement_source_file_path
+from embedder import embed_question , bm25_search  , RFF_TOP_PICKS , reranker 
+from document_loader import load_document 
+from model import enhancing_chunks
 
 if __name__ == "__main__":
-    # main()
-    index , chunks , bm25 = manual_initialization_pipeline(file_paths,activate_hybrid_embedding) # returns a populated FAISS index, the chunks, and a BM25 index
+    # main() # enhancing the chunks
+    index , chunks , bm25 = manual_initialization_pipeline(file_paths,activate_hybrid_embedding,True ) # returns a populated FAISS index, the chunks, and a BM25 index
     list_of_questions_and_answers = eval_set_loader() 
-   
     total_5 = 0 
     hitat5 = 0 
     for  dictionary in list_of_questions_and_answers : 
@@ -16,12 +17,16 @@ if __name__ == "__main__":
         embedded_question = np.array(embed_question(question_string)).reshape(1, -1)
         _  , indices = index.search(embedded_question,k=hybdrid_embedding_top_k)
         if activate_hybrid_embedding : 
-            top_k = bm25_search(bm25 ,question_string) 
+            top_k,_ = bm25_search(bm25 ,question_string) 
             # after getting the bm25 one we start calculating the RFF 
             retrieved_chunks = RFF_TOP_PICKS(indices[0],top_k,chunks)
         else : retrieved_chunks = [chunks[i]["text"] for i in indices[0]]
 
 
+        # on Top of hybrid embeddings we are going to Apply reranking 
+
+        reranked = reranker(question_string,retrieved_chunks) 
+        filtered_chunks = [r[0] for r in reranked ]
 
 
 
@@ -30,14 +35,15 @@ if __name__ == "__main__":
             target_hits = len(dictionary["source_snippet"]) 
             local_hits = 0 
             for snippet in dictionary["source_snippet"]:
-                if any(snippet in s for s in retrieved_chunks ) :
-                    local_hits +=1 
-                if local_hits == target_hits :
-                    hitat5+=1 
-                    break 
+                if any(snippet in s for s in filtered_chunks ) :
+                    local_hits +=1
+                    hitat5+=1  
+                #if local_hits == target_hits :
+                 #   hitat5+=1 
+                  #  break 
                      
         else :
-            if any(dictionary["source_snippet"] in s for s in retrieved_chunks ) :
+            if any(dictionary["source_snippet"] in s for s in filtered_chunks ) :
 
                 hitat5 +=1 
         total_5 +=1 
