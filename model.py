@@ -210,11 +210,16 @@ def ask_CLAUDE_TO_EVALUATE_RESPONSE(response , client , model_name , refrence_te
 
 def enhancing_chunks(chunk,doc_text,file_path=enhancement_source_file_path ,claude_mode = False ):
     enhancment_schema = define_LLM_EVALUATION_SCHEMA(2)
-    user_prompt = [
-        {"type": "text", "text": f"Here is the full DOCUMENT for context:\n{doc_text[0]}", "cache_control": {"type": "ephemeral"}},
-        {"type": "text", "text": f"---\n\nHere is the specific CHUNK...\n{chunk['text']}\n\nWrite the blurb now."}
-    ]
-    
+
+    if claude_mode == True:    
+        user_prompt = [
+            {"type": "text", "text": f"Here is the full DOCUMENT for context:\n{doc_text[0]}", "cache_control": {"type": "ephemeral"}},
+            {"type": "text", "text": f"---\n\nHere is the specific CHUNK...\n{chunk['text']}\n\nWrite the blurb now."}
+        ]
+    else :
+        user_prompt = f"Here is the full DOCUMENT for context:\n{doc_text[0]}\n\n---\n\nHere is the specific CHUNK...\n{chunk['text']}\n\nWrite the blurb now."    
+
+
     enhancement_system_prompt = "You are given a full document and one chunk extracted from it. Write a short blurb (1-2 sentences) that situates this chunk within the document - what section or topic it is from, with any vague references (like 'this study' or 'the program') resolved using information elsewhere in the document. The purpose is to make the chunk easier to find in a search index when it actually contains the answer to a question. Use only information explicitly stated in the document - do not guess or add outside knowledge. Do not summarize or repeat the chunk's own content."
 
     if claude_mode == True :
