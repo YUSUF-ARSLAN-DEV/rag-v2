@@ -1,7 +1,7 @@
 import os
 import json
 from collections import Counter
-
+import time 
 import faiss
 import numpy as np
 
@@ -37,8 +37,14 @@ def manual_initialization_pipeline(file_paths, activate_hybrid=False,activate_en
     chunks = chunk(text_string, chunk_size, overlap_size, file_paths)
 
     if activate_enhancement : 
+         t_start = time.time()
          for i in range(len(chunks)):
-            chunks[i]["text"] = enhancing_chunks(chunks[i], text_string) + " " + chunks[i]["text"]
+            t0 = time.time()
+            chunks[i]["text"] = enhancing_chunks(chunks[i], text_string) + " " + chunks[i]["text"] 
+            dt = time.time() - t0
+            elapsed = time.time() - t_start
+            print(f"[enhancement] chunk {i+1}/{len(chunks)} done in {dt:.1f}s | total {elapsed:.1f}s", flush=True)
+
     # bm25 is built once here (ingest time) from chunks only - querying it with an
     # actual question happens later, per-question, via bm25_search(bm25, question).
     bm25 = build_bm25_index(chunks) if activate_hybrid else None
