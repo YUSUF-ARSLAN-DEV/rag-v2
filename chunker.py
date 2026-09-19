@@ -16,7 +16,7 @@ encoder = tiktoken.get_encoding("cl100k_base")
 def chunk(text , chunk_size = 200  , overlap = 50,test_paths = file_paths) :
     # text is a list of strings where each string represents a documentq 
 
-
+    paragraphs = [] 
     chunks = []  #  a list of dictionaries where each dictionary
                 #has a key "text" and the value is the chunked text
     tokens_list  = encoder.encode_batch(text) 
@@ -35,7 +35,7 @@ def chunk(text , chunk_size = 200  , overlap = 50,test_paths = file_paths) :
             chunk = token_list[i:i+chunk_size ] # numbers aka tokens
             chunk = encoder.decode(chunk) # reverts this bunch of tokens back to a string 
             chunk_dict = {
-                "id":"source_"+str(id)+"chunk_"+str(i)+"__"+str(i+chunk_size),    # unique id for each chunk
+                "id":"source_paragraph"+str(id)+"chunk_"+str(i)+"__"+str(i+chunk_size),    # unique id for each chunk
                 "text": chunk, 
                 "start_token":i, 
                 "source":source ,
