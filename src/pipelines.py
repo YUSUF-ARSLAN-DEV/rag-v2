@@ -9,7 +9,6 @@ from chunker import chunk, save_chunks, read_chunks
 from embedder import fais_chunks_embedder, populate_index, embed_question, read_embedding_index, save_embedding_index , build_bm25_index, bm25_search
 from document_loader import load_document
 from config import chunk_size, overlap_size, file_paths
-from model import askQuestionToAI, ask_AI_TO_EVALUTE_RESPONSE, askQuestionToClaude, ask_CLAUDE_TO_EVALUATE_RESPONSE , enhancing_chunks
 from evaluate import reading_the_golden_set
 
 
@@ -32,11 +31,11 @@ def askQuestionToIndex(index, chunks):
     return [text_passed_to_AI, question, sources]  # [context, question, sources]
 
 
-def manual_initialization_pipeline(file_paths, activate_hybrid=False,activate_enhancement=False ):  # chunk and embed from scratch every time
+def manual_initialization_pipeline(file_paths, activate_hybrid=False,activate_chunk_enhancement=False ):  # chunk and embed from scratch every time
     text_string = load_document(file_paths)
     chunks = chunk(text_string, chunk_size, overlap_size, file_paths)
 
-    if activate_enhancement : 
+    if activate_chunk_enhancement : 
          t_start = time.time()
          for i in range(len(chunks)):
             t0 = time.time()

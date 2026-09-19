@@ -50,4 +50,4 @@ if __name__ == "__main__":
         total_5 +=1
 
 
-    print(f"This is the hit at 5 rate:{(hitat5/total_5)*100} %")
+    print(f"hit-rate@5 (= recall@5 here):{(hitat5/total_5)*100} %")

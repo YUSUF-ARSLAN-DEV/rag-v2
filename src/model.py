@@ -1,7 +1,7 @@
 from openai import OpenAI
-from document_loader import load_document
+from src.document_loader import load_document
 import anthropic
-from config import enhancement_source_file_path 
+from src.config import enhancement_source_file_path 
 from dotenv import load_dotenv
 import os
 import json
