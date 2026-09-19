@@ -2,7 +2,7 @@ import os
 from rank_bm25 import BM25Okapi
 from sentence_transformers  import SentenceTransformer , CrossEncoder 
 import faiss
-from src.config import hybdrid_embedding_top_k  ,c_rff_value 
+from config import hybdrid_embedding_top_k  ,c_rff_value 
 model = SentenceTransformer("BAAI/bge-large-en-v1.5")
 reranker_model = CrossEncoder("BAAI/bge-reranker-base")
 def fais_chunks_embedder(chunks) :

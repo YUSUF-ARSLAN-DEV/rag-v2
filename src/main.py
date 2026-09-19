@@ -1,5 +1,5 @@
 import numpy as np
-from pipelines import main, Checking_claude , manual_initialization_pipeline , eval_set_loader
+from pipelines import main, Checking_claude , manual_initialization_pipeline , eval_set_loader , testing_chunk_sanity , snippets_hit
 from config import file_paths , activate_hybrid_embedding , hybdrid_embedding_top_k  , enhancement_source_file_path
 from embedder import embed_question , bm25_search  , RFF_TOP_PICKS , reranker
 from document_loader import load_document
@@ -31,22 +31,8 @@ if __name__ == "__main__":
 
 
 
-        if type(dictionary["source_snippet"]) == list :
-            target_hits = len(dictionary["source_snippet"])
-            local_hits = 0
-            for snippet in dictionary["source_snippet"]:
-                if any(snippet in s for s in filtered_chunks ) :
-                    local_hits +=1 
-                    
-                
-                if local_hits == target_hits :
-                    hitat5+=1
-                    break # stop itearating break this inner loop 
-
-        else :
-            if any(dictionary["source_snippet"] in s for s in filtered_chunks ) :
-
-                hitat5 +=1
+        if snippets_hit(dictionary["source_snippet"], filtered_chunks):
+            hitat5 += 1
         total_5 +=1
 
 

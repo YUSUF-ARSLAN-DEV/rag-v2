@@ -1,4 +1,5 @@
 import os
+import re
 import json
 from collections import Counter
 import time 
@@ -10,6 +11,7 @@ from embedder import fais_chunks_embedder, populate_index, embed_question, read_
 from document_loader import load_document
 from config import chunk_size, overlap_size, file_paths
 from evaluate import reading_the_golden_set
+from model  import askQuestionToAI ,ask_AI_TO_EVALUTE_RESPONSE , ask_CLAUDE_TO_EVALUATE_RESPONSE ,askQuestionToClaude
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +68,7 @@ def automatic_initialization_pipeline(index_file_name, chunk_file_name):
 #  "source_snippet": "verbatim quote" or ["quote 1", "quote 2", ...]}
 # ---------------------------------------------------------------------------
 
-def eval_set_loader(path="eval_set_one.json"):
+def eval_set_loader(path="test_sets/eval_set_one.json"):
     questions = []
     with open(path, "r", encoding="utf-8") as f:
         for line_number, line in enumerate(f, start=1):
@@ -183,3 +185,29 @@ def Checking_claude(limit=None):
     rows = run_generation_eval(askQuestionToClaude, ask_CLAUDE_TO_EVALUATE_RESPONSE, label="CLAUDE", limit=limit)
     diagnose_hallucinations(rows)
     return rows
+
+def normalize_for_match(text):
+    # PDF text carries hyphenation ("moni- toring"), curly quotes and markup noise that the
+    # hand-typed snippets don't have, so compare on lowercase letters + digits only.
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+def snippets_hit(snippets, texts):
+    # True if EVERY snippet (str or list of str) appears in at least one of `texts`.
+    if isinstance(snippets, str):
+        snippets = [snippets]
+    normalized_texts = [normalize_for_match(t) for t in texts]
+    return all(any(normalize_for_match(s) in t for t in normalized_texts) for s in snippets)
+
+
+def testing_chunk_sanity():
+    text_list = load_document(file_paths)
+    chunks = chunk(text_list)
+    eval_set = eval_set_loader()
+    absolute_existence = 0
+    for question in eval_set:
+        if snippets_hit(question["source_snippet"], [c["text"] for c in chunks]):
+            absolute_existence += 1
+        else:
+            print("MISSING:", question["question"])
+    print(f"{absolute_existence}/{len(eval_set)} snippets exist in chunks")
