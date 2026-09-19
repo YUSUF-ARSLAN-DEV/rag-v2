@@ -9,6 +9,7 @@ file_paths = [
 activate_hybrid_embedding = True 
 hybdrid_embedding_top_k =  50
 c_rff_value = 60
+activate_rerank = False 
 
 # keep these here for now to save time 
 # r"C:\Users\aonli\Desktop\Books That I am Reading- IN SHA ALLAH\Programming Books\Introduction to Machine Learning with Python ( PDFDrive.com )-min.pdf",

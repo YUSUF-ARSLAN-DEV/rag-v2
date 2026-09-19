@@ -1,6 +1,6 @@
 import numpy as np
 from pipelines import main, Checking_claude , manual_initialization_pipeline , eval_set_loader , testing_chunk_sanity , snippets_hit
-from config import file_paths , activate_hybrid_embedding , hybdrid_embedding_top_k  , enhancement_source_file_path
+from config import file_paths , activate_hybrid_embedding , hybdrid_embedding_top_k  , enhancement_source_file_path , activate_rerank 
 from embedder import embed_question , bm25_search  , RFF_TOP_PICKS , reranker
 from document_loader import load_document
 from model import enhancing_chunks
@@ -24,9 +24,11 @@ if __name__ == "__main__":
 
 
         # on Top of hybrid embeddings we are going to Apply reranking
-
-        reranked = reranker(question_string,retrieved_chunks)
-        filtered_chunks = [r[0] for r in reranked ]
+        if activate_rerank :
+            reranked = reranker(question_string,retrieved_chunks)
+            filtered_chunks = [r[0] for r in reranked ]
+        else :
+            filtered_chunks = retrieved_chunks 
 
 
 
