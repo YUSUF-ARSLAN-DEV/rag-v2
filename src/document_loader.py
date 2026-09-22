@@ -28,6 +28,29 @@ def read_docx(file_path):
     return text
        
 
+
+def pick_files():
+    file_paths = set()
+    while True:
+        path = input("Paste the path to a document (or press Enter to finish): ").strip().strip('"')
+        if path == "":
+            break
+        if not os.path.isfile(path):
+            print(f"  ✗ {path} does not exist. Try again.")
+            continue
+        if path in file_paths:
+            print("  Already added, skipping.")
+            continue
+        file_paths.add(path)
+        print(f"  ✓ Added ({len(file_paths)} total)")
+
+    if not file_paths:
+        print("No files provided. Exiting.")
+        return []
+
+    question = input("\nEnter your question: ").strip()
+    return list(file_paths), question
+
 # now we can pass multiple files 
 def load_document(file_path ):
     # list of strings 
