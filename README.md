@@ -66,15 +66,28 @@ numbers needed correction before they were trustworthy.
 ### Retrieval quality (real eval set, 22 Q, hit@5 — strict: every required snippet must be
 in the top-5)
 
+Measured with the normalized matcher (`snippets_hit`, see Key findings). Every one of the 22
+gold snippets exists in the chunk set, so 100% is reachable.
+
 | Configuration | hit@5 |
 |---|---|
-| Dense-only (`bge-large-en-v1.5`) | 18.8% |
-| + Hybrid search (BM25 + RRF fusion, top-20) + cross-encoder rerank | 36.4% |
-| + Contextual Retrieval (LLM-generated per-chunk blurb prepended before embedding) | Inconclusive (see Limitations) |
+| Dense-only, top-5, no rerank | 63.6% (14/22) |
+| Dense-only, top-20 → rerank → 5 | 72.7% (16/22) |
+| Dense-only, top-50 → rerank → 5 | 77.3% (17/22) |
+| Hybrid (BM25 + dense, RRF fusion), top-5 straight from RRF, no rerank | 72.7% (16/22) |
+| Hybrid + cross-encoder rerank (RRF top-20 → top-5; reranking the full fused list gives the same 81.8%) | 81.8% (18/22) |
+| Hybrid, k=20 per retriever (fused pool up to 40) + rerank → top-5 — **current config** | **90.9%** (20/22) |
+| *Reference:* RRF top-20 shortlist, no rerank (ceiling for the reranker) | 86.4% (19/22) |
+| + Contextual Retrieval (LLM-generated per-chunk blurb prepended before embedding) | Not re-measured with the corrected matcher |
 
-Hybrid search **doubled** retrieval recall over dense-only — the clearest, most reliable win
-in this project. Reranking and Contextual Retrieval did not produce a further, confirmed
-improvement (see below).
+Each stage helps a little: hybrid over dense (+9 points at top-5, +9 with rerank), rerank over
+no rerank (+9 points), and a larger candidate pool helps the reranker (dense: top-5 pool
+63.6% → top-20 72.7% → top-50 77.3%). Reranking adds +2 questions over raw RRF order, and the 4 remaining misses all
+had the gold chunk inside the top-20 shortlist, so the shortlist is not the bottleneck. With
+22 questions (each ~4.5 points) the +2 is suggestive, not conclusive.
+
+*Historical numbers (18.8% dense-only, 36.4% hybrid + rerank) were produced with an
+exact-substring matcher that under-counted; they are superseded by the table above.*
 
 ## Key findings
 
@@ -83,20 +96,27 @@ improvement (see below).
   transcribed eval snippets (plain spaces) caused a **0% hit rate across every question**,
   which looked like a retrieval failure but was actually a string-comparison bug. Fixed by
   normalizing whitespace at the PDF-extraction source (`document_loader.read_pdf`).
+- **The measuring stick was the biggest bug, twice.** After the whitespace fix, hit@5 still
+  read 27–36% because `snippet in chunk_text` demanded a byte-exact match, while the
+  hand-typed snippets differed from the PDF's raw text in small ways: line-break hyphenation
+  (`moni- toring`), curly vs straight quotes, LaTeX markup and dropped hyphens typed into the
+  snippet. A diagnostic showed 8/22 snippets exact-matched any chunk; with a normalized
+  comparison (`snippets_hit`: lowercase, letters and digits only, applied to both sides,
+  stored text untouched) all 22 do. Same retrieval, hit@5 rose from ~27–36% to 81.8%.
+- **An unbounded candidate list is not "hit@5".** Turning the reranker off in the eval loop
+  passed the *entire* RRF-fused list (65–80 of 96 chunks) to the hit check and reported 100%.
+  That was hit@~70, not hit@5. Truncated correctly, the no-rerank number is 72.7%.
 - **"Hallucination on impossible questions" needed to be split by faithfulness.** Of the
   cases where a model answered a question the eval set marked impossible, most were
   faithful (context-grounded, just disagreeing with an overly strict SQuAD label);
   only a minority were genuine fabrications. The naive metric overstated hallucination
   by roughly 3x.
-- **A cross-encoder reranker given every chunk, no candidate-selection bottleneck, still
-  only reached 31.6% hit@5** — worse than hybrid+rerank's 36.4%. This ruled out "hybrid's
-  top-20 shortlist is losing the answer" as the bottleneck and pointed at the chunk text
-  itself lacking self-contained signal (generic academic phrasing, citation-list noise).
-- **Chunk boundaries directly destroy retrievable facts.** Manual inspection of retrieval
-  misses found cases where the correct chunk was retrieved at rank 1, but the chunk was
-  truncated mid-sentence or mid-word before the actual answer (e.g., a chunk ending
-  `"...The incidence of falls in long-t"` right before the number that answered the
-  question). This chunking bug affects an estimated ~25% of remaining misses.
+- **Two earlier conclusions are withdrawn.** Both were drawn from numbers produced by the
+  under-counting matcher: (1) "a reranker given every chunk reached only 31.6%, so the
+  bottleneck is chunk text quality", and (2) "chunk boundaries destroy facts in an estimated
+  ~25% of remaining misses". The corrected check shows every gold snippet fits inside at
+  least one chunk (50-token overlap), so neither claim is supported. They should be
+  re-tested with the corrected matcher before being relied on.
 - **Contextual Retrieval's true effect on hit@5 was never cleanly measured.** By the time
   it was implemented, the hit-check counting rule had also changed (strict "all snippets
   must match" vs. lenient "any snippet matches"), confounding the before/after comparison.
@@ -104,16 +124,21 @@ improvement (see below).
 
 ## Limitations
 
-- **Retrieval accuracy is weak in absolute terms.** Best measured hit@5 on the real eval
-  set is 36.4% (strict rule) — meaning most questions do not have all required
-  information in the top-5 retrieved chunks. This is the main open problem in the project.
-- **Chunking is naive and demonstrably breaks facts.** `chunker.py` slices the document by
-  raw token count with zero sentence/paragraph awareness, confirmed to cut sentences and
-  even words in half at chunk boundaries. A sentence-aware or paragraph-aware chunker was
-  designed but not implemented — deprioritized after estimating it would only recover
-  ~25% of remaining misses relative to the engineering effort required, and after
-  confirming this PDF's extracted text has no reliable paragraph markers (`pypdf` emits a
-  single `\n` at both line-wraps and paragraph starts, indistinguishably).
+- **Best measured hit@5 is 81.8% (18/22) on a small set.** The 4 misses all had the gold
+  chunk in the RRF top-20 but lost it at the rerank stage, so the reranker (and the
+  multi-chunk question type, where one required chunk is dropped) is the current weak spot.
+  Retrieval hit@5 says the right text was retrieved, not that the LLM answers correctly;
+  the generation eval has not yet been run against this real document.
+- **Chunking is naive.** `chunker.py` slices the document by raw token count with zero
+  sentence/paragraph awareness, and can cut sentences mid-word. Its measured impact is
+  currently unknown: the earlier "~25% of misses" estimate is withdrawn (see Key findings).
+  This PDF's extracted text also has no reliable paragraph markers (`pypdf` emits a single
+  `\n` at both line-wraps and paragraph starts). `pymupdf4llm` is a candidate replacement
+  extractor.
+- **PDF extraction artifacts.** Line-break hyphenation splits words (`moni- toring`), which
+  hurts BM25 tokenization even though an LLM reads it fine. Not yet fixed at the loader.
+- **One eval question is questionable.** Row 21 is labeled `impossible` but carries a gold
+  snippet, so it should probably be excluded from hit@5.
 - **Tiny eval set.** 22 hand-written questions is enough to catch large regressions but too
   small to reliably measure small effects — each question is ~4.5 percentage points.
 - **Single test document.** All Phase 3 retrieval tuning was measured against one 14-page
@@ -148,6 +173,7 @@ local Ollama instance for `ASKLOCAL=True`). See `config.py` for chunking/retriev
 
 ## Roadmap
 
-See `finalplan.txt` for the full phase-by-phase plan. Immediate next steps: sentence-aware
-chunking, a clean (non-confounded) re-measurement of Contextual Retrieval, then Phase 3.5
+See `finalplan.txt` for the full phase-by-phase plan. Immediate next steps: per-query run
+logging (Phase 2.5), a clean re-measurement of Contextual Retrieval against the corrected
+baseline, evaluating `pymupdf4llm` extraction, then Phase 3.5
 (CI-gated eval) and onward to the FastAPI backend and deployment.

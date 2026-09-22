@@ -129,9 +129,10 @@ def define_LLM_EVALUATION_SCHEMA(schema=0):
             "type":"object" ,
             "properties":  {
                 "answer": {"type":"string","description":"The answer text extracted solely from the context. If you cannot answer from the context, leave this as an empty string."},
-                "answered": {"type":"boolean","description":"True if you answered the question from the context, False if the context does not contain the answer."}
+                "answered": {"type":"boolean","description":"True if you answered the question from the context, False if the context does not contain the answer."},
+                "specific_refrence" : {"type":"string", "description":"I want you to excerpt , write here the specific string that you got your answer from basically your refrence -from the provided relevant context , quote the exact n number of words that you got your answer from do not hallucinate and do not make up a source text to get the answer from "}
             },
-            "required":["answer","answered"]
+            "required":["answer","answered","specific_refrence"]
         }
         return answer_schema
     elif schema == 2 : 

@@ -7,7 +7,7 @@ import faiss
 import numpy as np
 
 from chunker import chunk, save_chunks, read_chunks
-from embedder import fais_chunks_embedder, populate_index, embed_question, read_embedding_index, save_embedding_index , build_bm25_index, bm25_search
+from embedder import fais_chunks_embedder, populate_index, embed_question, read_embedding_index, save_embedding_index , build_bm25_index, bm25_search , RFF_TOP_PICKS  , reranker 
 from document_loader import load_document
 from config import chunk_size, overlap_size, file_paths
 from evaluate import reading_the_golden_set
@@ -211,3 +211,35 @@ def testing_chunk_sanity():
         else:
             print("MISSING:", question["question"])
     print(f"{absolute_existence}/{len(eval_set)} snippets exist in chunks")
+
+
+
+def question_pipeline(question , file_path) :
+    if type(file_path) != list :
+        file_path = [file_path ]
+    embedded_question =np.array( [embed_question(question)]).astype("float32")  # question embedded 
+    text  =load_document(file_path)
+    chunks = chunk(text) 
+
+    # Embedding the Chunks  - Using FIASS and BM25  
+    faiss_embedded  = fais_chunks_embedder(chunks)
+    bm25_populated_index  = build_bm25_index(chunks)
+    faiss_index_populated = populate_index(faiss_embedded) 
+    _ , top_k_chunk_indices_faiss  =faiss_index_populated.search(embedded_question)
+
+    top_k_chunk_indices_bm25  , _ = bm25_search(bm25_populated_index ,question  )
+    top_hybrid_chunks  = RFF_TOP_PICKS(top_k_chunk_indices_faiss,top_k_chunk_indices_bm25 , chunks ) # returns a list of tok  k strings 
+
+    top_chunks  = reranker(question , top_hybrid_chunks)
+    # building the question q_stack
+    evidence_text = "\n\n".join(top_chunks)  
+    q_stack = [evidence_text ,question,] 
+    TheAIResponse , _ , _ , _ , _ = askQuestionToAI(q_stack,local=True)
+    AI_RESPONSE_DICT = json.loads(TheAIResponse)
+    QUESTION_ANSWER = AI_RESPONSE_DICT["answer"]
+    ANSWER_STATE =   AI_RESPONSE_DICT["answered"].strip().lower() =="true"
+    REFERENCE = AI_RESPONSE_DICT["specific_refrence"]
+    if ANSWER_STATE :
+        return QUESTION_ANSWER  ,REFERENCE
+    else : 
+       return  "The Model was not able to answer your question usving the provided documents and text materia " 

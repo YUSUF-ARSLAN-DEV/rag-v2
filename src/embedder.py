@@ -21,39 +21,39 @@ def build_bm25_index(chunks):
 def bm25_search(bm25, question, k=hybdrid_embedding_top_k):
     tokenized_question = question.lower().split()  # must match build_bm25_index's tokenizer
     scores = bm25.get_scores(tokenized_question)
-    top_k = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:k]
-    return top_k, [scores[i] for i in top_k]  # chunk indices + their BM25 scores, best first
+    top_k = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:k] # retriving the top indices 
+    return top_k, [scores[i] for i in top_k]  # chunk indices + their BM25 scores, best first # the second returned is the actual scores 
 
 def embed_question(question) :
     question_vector = model.encode(question,show_progress_bar=True) 
     return question_vector 
 
-def RFF_TOP_PICKS(top_chunks_faiss , top_chunks_bm25,chunks) : 
+def RFF_TOP_PICKS(top_chunks_faiss_indices , top_chunks_bm25_indices,chunks) : 
     # calculating RFF scored for faiss 
-    rff_faiss =  [1/(s+c_rff_value) for s, i in enumerate( top_chunks_faiss,start=1 ) ]
-    rff_bm25 = [1/(s+c_rff_value) for s, i in enumerate(top_chunks_bm25,start = 1) ]
+    rff_faiss =  [1/(s+c_rff_value) for s, i in enumerate( top_chunks_faiss_indices,start=1 ) ]
+    rff_bm25 = [1/(s+c_rff_value) for s, i in enumerate(top_chunks_bm25_indices,start = 1) ]
     master_dict = {} 
     i= 0 
-    for f , b in zip(top_chunks_faiss,top_chunks_bm25 ): # f,b being indices 
+    for f , b in zip(top_chunks_faiss_indices,top_chunks_bm25_indices ): # f,b being indices 
         if f not in master_dict : 
             master_dict[f] = rff_faiss[i] 
         else : 
             master_dict[f] += rff_faiss[i] 
-        if b not in master_dict : #O(n) btw lolls 
+        if b not in master_dict : #O(1) btw lolls 
             master_dict[b] = rff_bm25[i]
         else : 
              master_dict[b] += rff_bm25[i]
         i+=1 
     # we have built the dictionary 
     arranged = sorted([k for k in master_dict],key=lambda k:master_dict[k] , reverse = True )
-    return [chunks[index]["text"] for index in arranged ] 
+    return [chunks[index]["text"] for index in arranged ][:hybdrid_embedding_top_k]
             
 def reranker(question , chunks, k=5 ) :
     scores = reranker_model.predict(  [  (question , chunk)  for chunk in chunks  ] ) 
     # building the combined list  
 
     combined = [(chunk,score) for chunk ,score in zip(chunks,scores )]
-    arranged = sorted(combined , key= lambda tup :tup[1] , reverse = True )[:k]
+    arranged = sorted(combined , key= lambda tup :tup[1] , reverse = True )[:k] # ararnging it using the score as the key but returning only the chunks 
     return arranged 
 
 

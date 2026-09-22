@@ -39,21 +39,21 @@ def load_document(file_path ):
         file_path = input("please paste your file path here").strip()   
 
     # checking for 0 or 1 path 
-    for file_path in file_path : 
-        if not os.path.isfile(file_path) : 
-            raise FileNotFoundError(f"The file {file_path} does not exist.")        
+    for path  in file_path : 
+        if not os.path.isfile(path) : 
+            raise FileNotFoundError(f"The file {path} does not exist.")        
         # just makesing sure it is not empty 
-        if os.path.isfile(file_path) : 
-            ext = os.path.splitext(file_path)[1].lower() 
+        if os.path.isfile(path) : 
+            ext = os.path.splitext(path)[1].lower() 
             if ext == ".txt" : 
-                strings.append(read_txt(file_path)) 
+                strings.append(read_txt(path)) 
             elif ext == ".pdf" : 
-                strings.append(read_pdf(file_path)) 
+                strings.append(read_pdf(path)) 
             elif ext == ".docx" : 
-                strings.append(read_docx(file_path)) 
+                strings.append(read_docx(path)) 
             else : 
                 raise ValueError("Unsupported file format. Please provide a .txt, .pdf, or .docx file.")
         else : 
-            raise FileNotFoundError(f"The file {file_path} does not exist.")        
+            raise FileNotFoundError(f"The file {path} does not exist.")        
         # just makesing sure it is not empty 
     return strings 
