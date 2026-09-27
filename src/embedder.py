@@ -2,7 +2,10 @@ import os
 from rank_bm25 import BM25Okapi
 from sentence_transformers  import SentenceTransformer , CrossEncoder 
 import faiss
-from config import hybdrid_embedding_top_k  ,c_rff_value 
+from document_loader import load_document 
+from chunker import chunk  , save_chunks 
+from config import hybdrid_embedding_top_k  ,c_rff_value , index_dimension , chunk_save_path  , shared_index_path 
+
 model = SentenceTransformer("BAAI/bge-large-en-v1.5")
 reranker_model = CrossEncoder("BAAI/bge-reranker-base")
 def fais_chunks_embedder(chunks) :
@@ -13,10 +16,15 @@ def fais_chunks_embedder(chunks) :
 
 # BM25 is built ONCE at ingest time, from the chunks only - there is no "the question"
 # yet at that point (many different questions get asked later, one at a time).
+
 def build_bm25_index(chunks):
     tokenized_chunks = [c["text"].lower().split() for c in chunks]  # same tokenizer used at query time
     return BM25Okapi(tokenized_chunks)
 
+
+
+
+    
 # Called once per question, at query time, against the already-built index.
 def bm25_search(bm25, question, k=hybdrid_embedding_top_k):
     tokenized_question = question.lower().split()  # must match build_bm25_index's tokenizer
@@ -65,6 +73,33 @@ def populate_index(twodarray): # this method  returns a populated faiss index
     index.add(twodarray) 
     return index  # now we have a populated index 
 
+
+def build_faiss_index( d, file_path=shared_index_path  ,read= False ):
+    index = None 
+    # checking if the file exists 
+   
+    if read == True : 
+        if os.path.exists(file_path) :
+            index = read_embedding_index(file_path)
+        else :
+            read = False 
+            
+    if read == False :  
+        index = faiss.IndexFlatL2(d)
+
+   
+    return index 
+
+
+def add_chunks_to_index(index ,chunks,vector,user_id_to_chunk_id , user_id , all_chunks ):
+    start = index.ntotal 
+    v_size = len(vector)
+    index.add(vector)
+    added_indices = [i for i in range(start,start+v_size)]
+    all_chunks.extend(chunks) 
+    user_id_to_chunk_id.setdefault(user_id , []).extend(added_indices )
+    save_chunks(all_chunks)
+    
 
 def save_embedding_index(index, file_path=None ) : 
     if file_path is None:

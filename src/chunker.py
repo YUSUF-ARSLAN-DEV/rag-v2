@@ -13,7 +13,7 @@ encoder = tiktoken.get_encoding("cl100k_base")
 #  and the value is the chunked text
 
 
-def chunk(text , chunk_size = 200  , overlap = 50,test_paths = file_paths) :
+def chunk(text ,user_id ,  chunk_size = 200  , overlap = 50,test_paths = file_paths) :
     # text is a list of strings where each string represents a documentq 
 
     
@@ -30,11 +30,12 @@ def chunk(text , chunk_size = 200  , overlap = 50,test_paths = file_paths) :
 
     # so that the overlap actually applies 
     for id , token_list  in enumerate(tokens_list) : # list is not an index but an actual list of tokens for a file 
-        source = os.path.basename(file_paths[id])  # get the file name from the path
+        source = os.path.basename(test_paths[id])  # get the file name from the path
         for i in range(0,len(token_list) ,step_size) : # we do not care about the value
             chunk = token_list[i:i+chunk_size ] # numbers aka tokens
             chunk = encoder.decode(chunk) # reverts this bunch of tokens back to a string 
             chunk_dict = {
+                "user_id":user_id ,
                 "id":"source_paragraph"+str(id)+"chunk_"+str(i)+"__"+str(i+chunk_size),    # unique id for each chunk
                 "text": chunk, 
                 "start_token":i, 
@@ -51,7 +52,7 @@ def chunk(text , chunk_size = 200  , overlap = 50,test_paths = file_paths) :
 
 # saving the chunks as JSOn 
 
-def save_chunks(chunks,file_path=None) : 
+def save_chunks(chunks,file_path="CHUNKS/all_chunks.json") : 
     if file_path is None:
         print("Please provide a file path to save the chunks.")
         file_path = input("please paste your file path here").strip()

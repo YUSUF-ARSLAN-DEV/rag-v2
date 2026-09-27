@@ -1,7 +1,9 @@
 from pypdf import PdfReader
+import json 
 import os
 import re
 from docx import Document
+from config import chunk_save_path , USER_CHUNK_MAPPING 
 
 def read_txt(filepath): 
     with open (filepath,"r",encoding= "utf-8") as file :
@@ -25,6 +27,11 @@ def read_docx(file_path):
     text = ''
     for paragraph in doc.paragraphs:
         text += paragraph.text + "\n" 
+    for table in doc.tables :
+        for row in table.rows : 
+            for cell in row.cells : 
+                text += cell.text + " "
+        
     return text
        
 
@@ -48,8 +55,8 @@ def pick_files():
         print("No files provided. Exiting.")
         return []
 
-    question = input("\nEnter your question: ").strip()
-    return list(file_paths), question
+    
+    return list(file_paths)
 
 # now we can pass multiple files 
 def load_document(file_path ):
@@ -80,3 +87,6 @@ def load_document(file_path ):
             raise FileNotFoundError(f"The file {path} does not exist.")        
         # just makesing sure it is not empty 
     return strings 
+
+
+def read_state_documents():

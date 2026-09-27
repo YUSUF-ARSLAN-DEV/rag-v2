@@ -214,35 +214,55 @@ def testing_chunk_sanity():
 
 
 
-def question_pipeline(question , file_path) :
-    if type(file_path) != list :
-        file_path = [file_path ]
-    embedded_question =np.array( [embed_question(question)]).astype("float32")  # question embedded 
-    text  =load_document(file_path)
-    chunks = chunk(text) 
+def build_index(file_paths):
+    if not isinstance(file_paths, list):
+        file_paths = [file_paths]
+    text = load_document(file_paths)
+    chunks = chunk(text, chunk_size, overlap_size, file_paths)
+    faiss_embedded = fais_chunks_embedder(chunks)
+    faiss_index = populate_index(faiss_embedded)
+    bm25 = build_bm25_index(chunks)
+    return faiss_index, chunks, bm25
 
-    # Embedding the Chunks  - Using FIASS and BM25  
-    faiss_embedded  = fais_chunks_embedder(chunks)
-    bm25_populated_index  = build_bm25_index(chunks)
-    faiss_index_populated = populate_index(faiss_embedded) 
-    _ , top_k_chunk_indices_faiss  =faiss_index_populated.search(embedded_question)
 
-    top_k_chunk_indices_bm25  , _ = bm25_search(bm25_populated_index ,question  )
-    top_hybrid_chunks  = RFF_TOP_PICKS(top_k_chunk_indices_faiss,top_k_chunk_indices_bm25 , chunks ) # returns a list of tok  k strings 
+def answer_question(question, faiss_index, chunks, bm25):
+    embedded_question = np.array([embed_question(question)]).astype("float32")
 
-    top_chunks  = reranker(question , top_hybrid_chunks)
-    # building the question q_stack
-    evidence_text = "\n\n".join(top_chunks)  
-    q_stack = [evidence_text ,question,] 
-    TheAIResponse , _ , _ , _ , _ = askQuestionToAI(q_stack,local=True)
-    AI_RESPONSE_DICT = json.loads(TheAIResponse)
-    QUESTION_ANSWER = AI_RESPONSE_DICT["answer"]
-    ANSWER_STATE =   AI_RESPONSE_DICT["answered"].strip().lower() =="true"
-    REFERENCE = AI_RESPONSE_DICT["specific_refrence"]
-    if ANSWER_STATE :
-        return QUESTION_ANSWER  ,REFERENCE
-    else : 
-       return  "The Model was not able to answer your question usving the provided documents and text materia " 
+    _, faiss_indices = faiss_index.search(embedded_question, k=hybdrid_embedding_top_k)
+    bm25_indices, _ = bm25_search(bm25, question)
+
+    hybrid_chunks = RFF_TOP_PICKS(faiss_indices[0], bm25_indices, chunks)
+    reranked = reranker(question, hybrid_chunks)
+    top_chunks = [r[0] for r in reranked]
+
+    evidence_text = "\n\n".join(top_chunks)
+    q_stack = [evidence_text, question, None]
+
+    raw, _, _, _, _ = askQuestionToAI(q_stack, local=True)
+    parsed = json.loads(raw)
+
+    if parsed["answered"]:
+        return parsed["answer"], parsed["specific_refrence"]
+    return "The model could not answer from the provided documents.", None , top_chunks
+
+
+def interactive_question_loop(file_paths= file_paths):
+    print("Building index once...")
+    faiss_index, chunks, bm25 = build_index(file_paths)
+    print(f"Index built: {len(chunks)} chunks.\n")
+
+    while True:
+        question = input("Question (or 'exit'): ").strip()
+        if question.lower() in {"exit", "quit", ""}:
+            break
+        answer, ref = answer_question(question, faiss_index, chunks, bm25)
+        print(f"\nAnswer: {answer}")
+        if ref:
+            print(f"Reference: {ref}")
+        print() 
+
+
+
 
 
 
