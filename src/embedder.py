@@ -2,6 +2,7 @@ import os
 from rank_bm25 import BM25Okapi
 from sentence_transformers  import SentenceTransformer , CrossEncoder 
 import faiss
+from pathlib import Path 
 from document_loader import load_document 
 from chunker import chunk  , save_chunks 
 from config import hybdrid_embedding_top_k  ,c_rff_value , index_dimension , chunk_save_path  , shared_index_path 
@@ -101,39 +102,18 @@ def add_chunks_to_index(index ,chunks,vector,user_id_to_chunk_id , user_id , all
     save_chunks(all_chunks)
     
 
-def save_embedding_index(index, file_path=shared_index_path ) : 
-    if file_path is None:
-        print("Please provide a file path to save the index.")
-        file_path = input("please paste your file path here").strip()
-    final = "embedding_indices/" + file_path
-    clean = final.strip('"')  # Remove any surrounding quotes
-    if not os.path.isfile(clean) :
-        os.makedirs(os.path.dirname(clean), exist_ok=True)
-        faiss.write_index(index,clean)
-        print(f"Index saved successfully at {clean}")
-    else :
-        faiss.write_index(index,clean)
+def save_embedding_index(index, file_path=shared_index_path) :
+    file_path = Path(file_path)  # accept either a str or a Path, use it uniformly from here on
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    faiss.write_index(index, str(file_path))  # faiss's C++ binding wants a plain str, not a Path
+    print(f"Index saved successfully at {file_path}")
 
-    
 
-def read_embedding_index(file_path=None) : 
-
-    if file_path is None:
-        print("Please provide a file path to read the index.")
-        file_path = input("please paste your file path here").strip()
-    final = "embedding_indices/"+file_path
-    clean = final.strip('"')  # Remove any surrounding quotes
-    if not os.path.isfile(clean) :
-        try:
-        
-            raise FileNotFoundError(f"The file {clean  } does not exist.")
-        
-        except FileNotFoundError as e:
-            print(e)
-            return None 
-        finally: 
-            print("Please make sure to save the index first before trying to read it.")
-    index = faiss.read_index(clean)
-    return index  
+def read_embedding_index(file_path=shared_index_path) :
+    file_path = Path(file_path)
+    if not file_path.is_file() :
+        print(f"The file {file_path} does not exist. Please save the index first before trying to read it.")
+        return None
+    return faiss.read_index(str(file_path))
 
 
