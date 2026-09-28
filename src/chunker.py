@@ -52,7 +52,7 @@ def chunk(text ,user_id ,  chunk_size = 200  , overlap = 50,test_paths = file_pa
 
 # saving the chunks as JSOn 
 
-def save_chunks(chunks,file_path="CHUNKS/all_chunks.json") : 
+def save_chunks(chunks,file_path=chunk_save_path) : 
     if file_path is None:
         print("Please provide a file path to save the chunks.")
         file_path = input("please paste your file path here").strip()
@@ -60,9 +60,11 @@ def save_chunks(chunks,file_path="CHUNKS/all_chunks.json") :
     clean = final.strip('"')  # Remove any surrounding quotes
     if not os.path.isfile(clean) :
         os.makedirs(os.path.dirname(clean), exist_ok=True)
-    with open(clean,"w",encoding="utf-8") as f :
-        json.dump(chunks,f ,ensure_ascii=False)
-        print(f"Chunks saved successfully at {clean}")
+
+    if os.path.exists(file_path):
+        with open(clean,"w",encoding="utf-8") as f :
+            json.dump(chunks,f ,ensure_ascii=False)
+            print(f"Chunks saved successfully at {clean}")
 
 
 def read_chunks(file_path=None):

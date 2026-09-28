@@ -101,7 +101,7 @@ def add_chunks_to_index(index ,chunks,vector,user_id_to_chunk_id , user_id , all
     save_chunks(all_chunks)
     
 
-def save_embedding_index(index, file_path=None ) : 
+def save_embedding_index(index, file_path=shared_index_path ) : 
     if file_path is None:
         print("Please provide a file path to save the index.")
         file_path = input("please paste your file path here").strip()

@@ -15,7 +15,7 @@ activate_hybrid_embedding = True
 hybdrid_embedding_top_k =  20
 c_rff_value = 60
 activate_rerank = True  
-index_dimension = 384
+index_dimension = 1024
 
 
 BASE_PATH =Path(__file__).resolve().parent.parent # this finds this file parent directory parent
@@ -23,6 +23,7 @@ BASE_PATH =Path(__file__).resolve().parent.parent # this finds this file parent 
 chunk_save_path = BASE_PATH/"INDEX_STATE"/"all_chunks.json"
 shared_index_path =BASE_PATH/"VECTOR_EMBEDDING"/"shared.faiss"
 USER_CHUNK_MAPPING=BASE_PATH/"INDEX_STATE"/"user_chunk_mapping.json"
+TEMPORARY_FILE_SAVING=BASE_PATH/"temporary_file_dic"
 # keep these here for now to save time 
 # r"C:\Users\aonli\Desktop\Books That I am Reading- IN SHA ALLAH\Programming Books\Introduction to Machine Learning with Python ( PDFDrive.com )-min.pdf",
 #r"C:\Users\aonli\Desktop\Books That I am Reading- IN SHA ALLAH\Programming Books\validationAlgorithms.pdf",

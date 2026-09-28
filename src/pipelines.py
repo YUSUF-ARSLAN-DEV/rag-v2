@@ -5,6 +5,7 @@ from collections import Counter
 import time 
 import faiss
 import numpy as np
+from fastapi import FastAPI 
 
 from chunker import chunk, save_chunks, read_chunks
 from embedder import fais_chunks_embedder, populate_index, embed_question, read_embedding_index, save_embedding_index , build_bm25_index, bm25_search , RFF_TOP_PICKS  , reranker 
@@ -12,7 +13,7 @@ from document_loader import load_document
 from config import chunk_size, overlap_size, file_paths , activate_hybrid_embedding , hybdrid_embedding_top_k , activate_rerank
 from evaluate import reading_the_golden_set
 from model  import askQuestionToAI ,ask_AI_TO_EVALUTE_RESPONSE , ask_CLAUDE_TO_EVALUATE_RESPONSE ,askQuestionToClaude
-
+import tempfile 
 
 # ---------------------------------------------------------------------------
 # Interactive RAG pipeline (ask a question about a real document you loaded)
@@ -261,11 +262,6 @@ def interactive_question_loop(file_paths= file_paths):
             print(f"Reference: {ref}")
         print() 
 
-
-
-
-
-
 def evaluate_recall_at_5() : 
     index , chunks , bm25 = manual_initialization_pipeline(file_paths,activate_hybrid_embedding,False ) # returns a populated FAISS index, the chunks, and a BM25 index
     list_of_questions_and_answers = eval_set_loader()
@@ -299,3 +295,31 @@ def evaluate_recall_at_5() :
 
 
     print(f"hit-rate@5 (= recall@5 here):{(hitat5/total_5)*100} %")
+
+
+###################################### 
+
+def processing_file_uploads(contents:bytes , file_name:str , faiss_index  , chunk_list,user_id ): 
+    suffix = os.path.splitext(file_name)[1]
+    try : 
+        with tempfile.NamedTemporaryFile(delete=False , suffix = suffix ) as tmp : 
+            tmp.write(contents) 
+            tmp_path = tmp.name 
+        if type(tmp_path) != list : 
+            wrapped_paaths = [tmp_path]
+        else : 
+            wrapped_paaths = tmp_path
+        string_list =load_document(wrapped_paaths)
+        chunks = chunk(string_list,user_id)
+        chunk_list.extend(chunks) 
+        vectors = fais_chunks_embedder(chunks) 
+   
+        faiss_index.add(vectors)
+        save_embedding_index(faiss_index)
+        save_chunks(chunk_list) 
+    finally : 
+        if tmp_path and os.path.exists(tmp_path) : 
+            os.remove(tmp_path) 
+
+
+        
