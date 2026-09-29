@@ -8,8 +8,8 @@ import numpy as np
 from fastapi import FastAPI 
 
 from chunker import chunk, save_chunks, read_chunks
-from embedder import fais_chunks_embedder, populate_index, embed_question, read_embedding_index, save_embedding_index , build_bm25_index, bm25_search , RFF_TOP_PICKS  , reranker 
-from document_loader import load_document
+from embedder import fais_chunks_embedder, populate_index, embed_question, read_embedding_index, save_embedding_index , build_bm25_index, bm25_search , RFF_TOP_PICKS  , reranker , add_chunks_to_index 
+from document_loader import load_document , save_user_chunk_mapping
 from config import chunk_size, overlap_size, file_paths , activate_hybrid_embedding , hybdrid_embedding_top_k , activate_rerank
 from evaluate import reading_the_golden_set
 from model  import askQuestionToAI ,ask_AI_TO_EVALUTE_RESPONSE , ask_CLAUDE_TO_EVALUATE_RESPONSE ,askQuestionToClaude
@@ -299,7 +299,7 @@ def evaluate_recall_at_5() :
 
 ###################################### 
 
-def processing_file_uploads(contents:bytes , file_name:str , faiss_index  , chunk_list,user_id ): 
+def processing_file_uploads(contents:bytes , file_name:str , faiss_index  , chunk_list,user_id,user_chunk_mapping): 
     suffix = os.path.splitext(file_name)[1]
     try : 
         with tempfile.NamedTemporaryFile(delete=False , suffix = suffix ) as tmp : 
@@ -313,13 +313,12 @@ def processing_file_uploads(contents:bytes , file_name:str , faiss_index  , chun
         chunks = chunk(string_list,user_id)
         chunk_list.extend(chunks) 
         vectors = fais_chunks_embedder(chunks) 
-   
-        faiss_index.add(vectors)
-        save_embedding_index(faiss_index)
-        save_chunks(chunk_list) 
+        add_chunks_to_index(faiss_index,chunks,vectors,user_chunk_mapping,user_id,chunk_list)
     finally : 
         if tmp_path and os.path.exists(tmp_path) : 
             os.remove(tmp_path) 
+
+
 
 
         

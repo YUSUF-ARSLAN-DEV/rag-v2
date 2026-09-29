@@ -100,6 +100,11 @@ def read_user_chunk_mapping():
             json.dump({},f)
     return mapping_dictionary 
 
+def save_user_chunk_mapping(mapping) :
+    if os.path.exists(USER_CHUNK_MAPPING) :
+        with open (USER_CHUNK_MAPPING,"w",encoding="utf-8") as f : 
+           json.dump(mapping,f)
+
 def read_chunk_history(): 
     chunk_dictionary_list = None 
     if os.path.exists(chunk_save_path):

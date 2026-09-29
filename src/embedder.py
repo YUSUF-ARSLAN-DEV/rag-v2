@@ -3,7 +3,7 @@ from rank_bm25 import BM25Okapi
 from sentence_transformers  import SentenceTransformer , CrossEncoder 
 import faiss
 from pathlib import Path 
-from document_loader import load_document 
+from document_loader import load_document , save_user_chunk_mapping
 from chunker import chunk  , save_chunks 
 from config import hybdrid_embedding_top_k  ,c_rff_value , index_dimension , chunk_save_path  , shared_index_path 
 
@@ -99,8 +99,11 @@ def add_chunks_to_index(index ,chunks,vector,user_id_to_chunk_id , user_id , all
     added_indices = [i for i in range(start,start+v_size)]
     all_chunks.extend(chunks) 
     user_id_to_chunk_id.setdefault(user_id , []).extend(added_indices )
+    save_user_chunk_mapping(user_id_to_chunk_id)
     save_chunks(all_chunks)
-    
+    save_embedding_index(index)
+    # this methods adds the vectors to the index , updataes the list of all chunks , saves the chunks 
+    # updates the list of user mpaping 
 
 def save_embedding_index(index, file_path=shared_index_path) :
     file_path = Path(file_path)  # accept either a str or a Path, use it uniformly from here on

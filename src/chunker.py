@@ -56,7 +56,7 @@ def save_chunks(chunks,file_path=chunk_save_path) :
     if file_path is None:
         print("Please provide a file path to save the chunks.")
         file_path = input("please paste your file path here").strip()
-    final = "chunk_lists/" + file_path
+    final = str(file_path)
     clean = final.strip('"')  # Remove any surrounding quotes
     if not os.path.isfile(clean) :
         os.makedirs(os.path.dirname(clean), exist_ok=True)

@@ -26,7 +26,7 @@ app = FastAPI(lifespan=lifespan)
 @app.post("/upload")
 async def upload_file(user_id:int = Form(...) , file:UploadFile = File(...) ) : 
     contents = await file.read() 
-    processing_file_uploads(contents , file.filename , app.state.faiss_index , app.state.all_chunks,user_id) 
+    processing_file_uploads(contents , file.filename , app.state.faiss_index , app.state.all_chunks,user_id,app.state.user_chunk_mapping) 
     return {"status":"Successful"}
 
 
