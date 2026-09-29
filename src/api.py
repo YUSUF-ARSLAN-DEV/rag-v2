@@ -1,6 +1,6 @@
 from fastapi import FastAPI , UploadFile , File , Form 
 from contextlib import asynccontextmanager 
-from pipelines import processing_file_uploads 
+from pipelines import processing_file_uploads, answer_question
 from embedder import build_faiss_index ,build_bm25_index
 from document_loader import read_chunk_history , read_user_chunk_mapping
 from config import index_dimension 
@@ -29,6 +29,20 @@ async def upload_file(user_id:int = Form(...) , file:UploadFile = File(...) ) :
     processing_file_uploads(contents , file.filename , app.state.faiss_index , app.state.all_chunks,user_id,app.state.user_chunk_mapping) 
     return {"status":"Successful"}
 
+
+
+@app.post("/ask") 
+def ask_question(question:str ,user_id:int) :
+    faiss  = app.state.faiss_index # chunks already added to the index 
+    this_users_chunk_indices = app.state.user_chunk_mapping[user_id]
+    this_users_chunks = [app.stat.all_chunks[i] for i in this_users_chunk_indices ]
+    text_from_chunks = [chunk["text"] for chunk in this_users_chunks ]
+    bm25 = build_bm25_index(text_from_chunks) # build the bm25 index on the spot for that user 
+    answer , refrence ,top_chunks= answer_question(question.strip(),faiss,text_from_chunks,bm25) 
+    if top_chunks == None :
+        return {"This is the AI's Answer":answer , "Refrence Used":refrence}
+    else :
+        return {"Model was unable to answer":answer , "top_chunks":top_chunks }
 
 
 
