@@ -54,7 +54,7 @@ def RFF_TOP_PICKS(top_chunks_faiss_indices , top_chunks_bm25_indices,chunks) :
              master_dict[b] += rff_bm25[i]
         i+=1 
     # we have built the dictionary 
-    arranged = sorted([k for k in master_dict],key=lambda k:master_dict[k] , reverse = True )
+    arranged = sorted([k for k in master_dict],key=lambda k:master_dict[k] , reverse = True ) # The highest RFF SCore 
     return [chunks[index]["text"] for index in arranged ][:hybdrid_embedding_top_k]
             
 def reranker(question , chunks, k=5 ) :
@@ -98,7 +98,7 @@ def add_chunks_to_index(index ,chunks,vector,user_id_to_chunk_id , user_id , all
     index.add(vector)
     added_indices = [i for i in range(start,start+v_size)]
     all_chunks.extend(chunks) 
-    user_id_to_chunk_id.setdefault(user_id , []).extend(added_indices )
+    user_id_to_chunk_id.setdefault(str(user_id) , []).extend(added_indices )
     save_user_chunk_mapping(user_id_to_chunk_id)
     save_chunks(all_chunks)
     save_embedding_index(index)

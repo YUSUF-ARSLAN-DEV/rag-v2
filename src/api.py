@@ -34,11 +34,11 @@ async def upload_file(user_id:int = Form(...) , file:UploadFile = File(...) ) :
 @app.post("/ask") 
 def ask_question(question:str ,user_id:int) :
     faiss  = app.state.faiss_index # chunks already added to the index 
-    this_users_chunk_indices = app.state.user_chunk_mapping[user_id]
-    this_users_chunks = [app.stat.all_chunks[i] for i in this_users_chunk_indices ]
+    this_users_chunk_indices = app.state.user_chunk_mapping[str(user_id)]
+    this_users_chunks = [app.state.all_chunks[i] for i in this_users_chunk_indices ]
     text_from_chunks = [chunk["text"] for chunk in this_users_chunks ]
-    bm25 = build_bm25_index(text_from_chunks) # build the bm25 index on the spot for that user 
-    answer , refrence ,top_chunks= answer_question(question.strip(),faiss,text_from_chunks,bm25) 
+    bm25 = build_bm25_index(this_users_chunks) # build the bm25 index on the spot for that user 
+    answer , refrence ,top_chunks= answer_question(question.strip(),faiss,app.state.all_chunks,bm25,this_users_chunk_indices) 
     if top_chunks == None :
         return {"This is the AI's Answer":answer , "Refrence Used":refrence}
     else :

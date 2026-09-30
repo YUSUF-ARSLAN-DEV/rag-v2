@@ -226,13 +226,16 @@ def build_index(file_paths):
     return faiss_index, chunks, bm25
 
 
-def answer_question(question, faiss_index, chunks, bm25):
+def answer_question(question, faiss_index, chunks, bm25 , this_user_indices ):
     embedded_question = np.array([embed_question(question)]).astype("float32")
 
-    _, faiss_indices = faiss_index.search(embedded_question, k=hybdrid_embedding_top_k)
-    bm25_indices, _ = bm25_search(bm25, question)
-
-    hybrid_chunks = RFF_TOP_PICKS(faiss_indices[0], bm25_indices, chunks)
+    sel = faiss.IDSelectorBatch(np.array(this_user_indices,dtype="int64"))
+    params = faiss.SearchParameters(sel=sel)  
+    _, faiss_indices  = faiss_index.search(embedded_question,k=hybdrid_embedding_top_k ,params=params)
+    
+    bm25_indices, _ = bm25_search(bm25, question) # they have the same positoinal order as this chunks_indices
+    bm25_global = [ this_user_indices[i]  for i in bm25_indices  ]
+    hybrid_chunks = RFF_TOP_PICKS(faiss_indices[0], bm25_global, chunks)
     reranked = reranker(question, hybrid_chunks)
     top_chunks = [r[0] for r in reranked]
 
@@ -243,7 +246,7 @@ def answer_question(question, faiss_index, chunks, bm25):
     parsed = json.loads(raw)
 
     if parsed["answered"]:
-        return parsed["answer"], parsed["specific_refrence"]
+        return parsed["answer"], parsed["specific_refrence"], None 
     return "The model could not answer from the provided documents.", None , top_chunks
 
 
@@ -311,7 +314,6 @@ def processing_file_uploads(contents:bytes , file_name:str , faiss_index  , chun
             wrapped_paaths = tmp_path
         string_list =load_document(wrapped_paaths)
         chunks = chunk(string_list,user_id)
-        chunk_list.extend(chunks) 
         vectors = fais_chunks_embedder(chunks) 
         add_chunks_to_index(faiss_index,chunks,vectors,user_chunk_mapping,user_id,chunk_list)
     finally : 

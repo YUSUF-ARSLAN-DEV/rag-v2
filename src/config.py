@@ -12,7 +12,7 @@ file_paths = [
 ]
 
 activate_hybrid_embedding = True 
-hybdrid_embedding_top_k =  20
+hybdrid_embedding_top_k =  10
 c_rff_value = 60
 activate_rerank = True  
 index_dimension = 1024

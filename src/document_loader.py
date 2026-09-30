@@ -91,7 +91,7 @@ def load_document(file_path ):
 
 def read_user_chunk_mapping():
     mapping_dictionary = None 
-    if os.path.exists(USER_CHUNK_MAPPING):
+    if os.path.exists(USER_CHUNK_MAPPING) and os.path.getsize(USER_CHUNK_MAPPING) > 0 :
          with open (USER_CHUNK_MAPPING , "r" , encoding="utf-8") as f : 
             mapping_dictionary = json.load(f) 
     else : 
@@ -107,7 +107,7 @@ def save_user_chunk_mapping(mapping) :
 
 def read_chunk_history(): 
     chunk_dictionary_list = None 
-    if os.path.exists(chunk_save_path):
+    if os.path.exists(chunk_save_path) and os.path.getsize(chunk_save_path) > 0 :
         with open (chunk_save_path , "r" , encoding="utf-8") as f : 
             chunk_dictionary_list = json.load(f) 
     else : 
