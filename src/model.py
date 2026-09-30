@@ -1,7 +1,7 @@
 from openai import OpenAI
 from document_loader import load_document
 import anthropic
-from config import enhancement_source_file_path 
+from config import enhancement_source_file_path ,base_url
 from dotenv import load_dotenv
 import os
 import json
@@ -23,7 +23,7 @@ def get_claude_client():
 def get_client(local=False):
     if local:
         client = OpenAI(
-            base_url="http://localhost:11434/v1",
+            base_url=base_url,
             api_key="ollama"
         )
     else:
