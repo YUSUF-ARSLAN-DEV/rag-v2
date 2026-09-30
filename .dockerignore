@@ -1,0 +1,8 @@
+venv/
+__pycache__/
+graphify-out/
+.git/
+INDEX_STATE/
+VECTOR_EMBEDDING/
+temporary_file_dic/
+.env
