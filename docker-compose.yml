@@ -1,0 +1,17 @@
+volumes:
+  index_state:
+  vector_embedding:
+  hf_cache:
+services:
+  api:
+    build: .
+    ports:
+      - "8003:8003"
+    env_file:
+      - .env 
+    volumes:
+      - index_state:/app/INDEX_STATE
+      - vector_embedding:/app/VECTOR_EMBEDDING #  mounting volumes to the compose 
+      - hf_cache:/root/.cache/huggingface
+
+ 
