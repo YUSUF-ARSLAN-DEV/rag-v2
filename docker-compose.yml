@@ -1,8 +1,16 @@
+
 volumes:
-  index_state:
-  vector_embedding:
+  pg_data:
   hf_cache:
 services:
+  db:
+    ports: 
+      - "5432:5432" 
+    image: pgvector/pgvector:pg16
+    volumes:
+     - pg_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD:  ${POSTGRES_PASSWORD}
   api:
     build: .
     ports:
@@ -10,8 +18,7 @@ services:
     env_file:
       - .env 
     volumes:
-      - index_state:/app/INDEX_STATE
-      - vector_embedding:/app/VECTOR_EMBEDDING #  mounting volumes to the compose 
       - hf_cache:/root/.cache/huggingface
+      
 
  
