@@ -1,5 +1,6 @@
-from openai import OpenAI
+from openai import OpenAI, InternalServerError, RateLimitError, APIConnectionError
 from document_loader import load_document
+import time
 import anthropic
 from config import enhancement_source_file_path ,base_url
 from dotenv import load_dotenv
@@ -198,26 +199,44 @@ def askQuestionToClaude(q_stack, local=False):  # local kept for signature parit
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
-def askQuestionToGemini(q_stack, local=False):  # local kept for signature parity, ignored
-    model_name = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
-    print(f"Sending your Queries to GEMINI ({model_name})")
+def _gemini_model_list():
+    # GEMINI_MODELS="gemini-3.5-flash,gemini-3.5-flash-lite" = try them in this order.
+    # Falls back to the single GEMINI_MODEL, then to a default.
+    raw = os.getenv("GEMINI_MODELS") or os.getenv("GEMINI_MODEL") or "gemini-3.5-flash"
+    return [m.strip() for m in raw.split(",") if m.strip()]
+
+
+def askQuestionToGemini(q_stack, local=False, retries_per_model=3):  # local kept for signature parity, ignored
     refrence_text = q_stack[0]
     question = q_stack[1]
     client = OpenAI(base_url=GEMINI_BASE_URL, api_key=os.getenv("GEMINI_API_KEY"))
-    response = client.chat.completions.create(
-        model=model_name,
-        temperature=0,
-        messages=[
-            {"role": "system", "content": ANSWERER_SYSTEM_PROMPT},
-            {"role": "user", "content": f"CONTEXT:\n{refrence_text}\n\nQUESTION:\n{question}"},
-        ],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {"name": "answer", "schema": define_LLM_EVALUATION_SCHEMA(1)},
-        },
-    )
-    TheAIResponse = response.choices[0].message.content
-    return TheAIResponse , client , model_name , refrence_text , question
+    last_error = None
+    # 503 = model overloaded, 429 = rate limited, connection errors: all usually temporary.
+    # Retry each model with a growing pause (1s, 2s, 4s...), then move on to the next model.
+    for model_name in _gemini_model_list():
+        for attempt in range(retries_per_model):
+            print(f"Sending your Queries to GEMINI ({model_name}), attempt {attempt + 1}/{retries_per_model}")
+            try:
+                response = client.chat.completions.create(
+                    model=model_name,
+                    temperature=0,
+                    messages=[
+                        {"role": "system", "content": ANSWERER_SYSTEM_PROMPT},
+                        {"role": "user", "content": f"CONTEXT:\n{refrence_text}\n\nQUESTION:\n{question}"},
+                    ],
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": {"name": "answer", "schema": define_LLM_EVALUATION_SCHEMA(1)},
+                    },
+                )
+                TheAIResponse = response.choices[0].message.content
+                return TheAIResponse , client , model_name , refrence_text , question
+            except (InternalServerError, RateLimitError, APIConnectionError) as e:
+                last_error = e
+                print(f"Gemini ({model_name}) temporary failure: {type(e).__name__}")
+                if attempt < retries_per_model - 1:
+                    time.sleep(2 ** attempt)
+    raise last_error  # every model and every retry failed
 
 
 # ---------------------------------------------------------------------------
