@@ -8,6 +8,7 @@ import numpy as np
 from fastapi import FastAPI 
 
 from chunker import chunk, save_chunks, read_chunks
+from db import hash_text , get_user_chunks  , search_user_vectors
 from embedder import fais_chunks_embedder, populate_index, embed_question, read_embedding_index, save_embedding_index , build_bm25_index, bm25_search , RFF_TOP_PICKS  , reranker , add_chunks_to_index 
 from document_loader import load_document , save_user_chunk_mapping
 from config import chunk_size, overlap_size, file_paths , activate_hybrid_embedding , hybdrid_embedding_top_k , activate_rerank
@@ -226,16 +227,22 @@ def build_index(file_paths):
     return faiss_index, chunks, bm25
 
 
-def answer_question(question, faiss_index, chunks, bm25 , this_user_indices ):
-    embedded_question = np.array([embed_question(question)]).astype("float32")
+def answer_question(question, user_id , db_connection  ):
+    embedded_question = np.array([embed_question(question)]).astype("float32")[0] # extracting the list 
 
-    sel = faiss.IDSelectorBatch(np.array(this_user_indices,dtype="int64"))
-    params = faiss.SearchParameters(sel=sel)  
-    _, faiss_indices  = faiss_index.search(embedded_question,k=hybdrid_embedding_top_k ,params=params)
+
+
+    all_chunks_for_user = get_user_chunks(db_connection,user_id )
+    bm25 = build_bm25_index(all_chunks_for_user ) 
+    bm25_indices, _ = bm25_search(bm25, question) # gets embedded inside 
+    FAISS_TOP = search_user_vectors(db_connection , user_id , embedded_question,hybdrid_embedding_top_k) 
+
+    # positions is a dictionary with chunk id and its position relative to all chunks - so that we perform RFF TOP SELECToin 
     
-    bm25_indices, _ = bm25_search(bm25, question) # they have the same positoinal order as this chunks_indices
-    bm25_global = [ this_user_indices[i]  for i in bm25_indices  ]
-    hybrid_chunks = RFF_TOP_PICKS(faiss_indices[0], bm25_global, chunks)
+    bm25_top_rows = [all_chunks_for_user[i] for i in bm25_indices ]
+
+
+    hybrid_chunks = RFF_TOP_PICKS(FAISS_TOP, bm25_top_rows)
     reranked = reranker(question, hybrid_chunks)
     top_chunks = [r[0] for r in reranked]
 
@@ -246,8 +253,8 @@ def answer_question(question, faiss_index, chunks, bm25 , this_user_indices ):
     parsed = json.loads(raw)
 
     if parsed["answered"]:
-        return parsed["answer"], parsed["specific_refrence"], None 
-    return "The model could not answer from the provided documents.", None , top_chunks
+        return {"answered": True, "answer": parsed["answer"], "reference": parsed["specific_refrence"], "top_chunks": top_chunks}
+    return {"answered": False, "answer": "The model could not answer from the provided documents.", "reference": None, "top_chunks": top_chunks}
 
 
 def interactive_question_loop(file_paths= file_paths):
@@ -302,7 +309,10 @@ def evaluate_recall_at_5() :
 
 ###################################### 
 
-def processing_file_uploads(contents:bytes , file_name:str , faiss_index  , chunk_list,user_id,user_chunk_mapping): 
+def processing_file_uploads(contents:bytes , file_name:str,user_id,db_connection ): 
+    # we save the file values in the db 
+    success = False 
+    # saving the bytes as a file temporarily 
     suffix = os.path.splitext(file_name)[1]
     try : 
         with tempfile.NamedTemporaryFile(delete=False , suffix = suffix ) as tmp : 
@@ -312,14 +322,34 @@ def processing_file_uploads(contents:bytes , file_name:str , faiss_index  , chun
             wrapped_paaths = [tmp_path]
         else : 
             wrapped_paaths = tmp_path
-        string_list =load_document(wrapped_paaths)
-        chunks = chunk(string_list,user_id)
-        vectors = fais_chunks_embedder(chunks) 
-        add_chunks_to_index(faiss_index,chunks,vectors,user_chunk_mapping,user_id,chunk_list)
+
+        # extracting data from that
+        strings_list =load_document(wrapped_paaths)
+        content_hash = hash_text(strings_list) 
+        chunks = chunk(strings_list,user_id)
+        vectors = fais_chunks_embedder(chunks)  # the document vectorized
+
+        # updating the docuemnts table first
+        doc_id = db_connection.execute("INSERT INTO documents (user_id,filename,content_hash) VALUES (%s,%s,%s) RETURNING id ",(user_id,file_name , content_hash )).fetchone()[0]
+
+        # preparing for batch inserstion 
+        rows = [(user_id , doc_id , c["text"], v ) for c,v in zip(chunks,vectors)]
+
+        sql_statement = "INSERT INTO chunks (user_id,document_id,chunk_text,chunk_vector) VALUES (%s,%s,%s,$s)"
+        db_connection.cursor().executemany(sql_statement, rows ) 
+
+        db_connection().commit() 
+        success = True 
+        
+
+    
+        
+       
+        # to be delted soon  add_chunks_to_index(faiss_index,chunks,vectors,user_chunk_mapping,user_id,chunk_list)
     finally : 
         if tmp_path and os.path.exists(tmp_path) : 
             os.remove(tmp_path) 
-
+    return success 
 
 
 

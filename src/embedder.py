@@ -19,7 +19,7 @@ def fais_chunks_embedder(chunks) :
 # yet at that point (many different questions get asked later, one at a time).
 
 def build_bm25_index(chunks):
-    tokenized_chunks = [c["text"].lower().split() for c in chunks]  # same tokenizer used at query time
+    tokenized_chunks = [c[1].lower().split() for c in chunks]  # same tokenizer used at query time
     return BM25Okapi(tokenized_chunks)
 
 
@@ -37,25 +37,16 @@ def embed_question(question) :
     question_vector = model.encode(question,show_progress_bar=True) 
     return question_vector 
 
-def RFF_TOP_PICKS(top_chunks_faiss_indices , top_chunks_bm25_indices,chunks) : 
-    # calculating RFF scored for faiss 
-    rff_faiss =  [1/(s+c_rff_value) for s, i in enumerate( top_chunks_faiss_indices,start=1 ) ]
-    rff_bm25 = [1/(s+c_rff_value) for s, i in enumerate(top_chunks_bm25_indices,start = 1) ]
-    master_dict = {} 
-    i= 0 
-    for f , b in zip(top_chunks_faiss_indices,top_chunks_bm25_indices ): # f,b being indices 
-        if f not in master_dict : 
-            master_dict[f] = rff_faiss[i] 
-        else : 
-            master_dict[f] += rff_faiss[i] 
-        if b not in master_dict : #O(1) btw lolls 
-            master_dict[b] = rff_bm25[i]
-        else : 
-             master_dict[b] += rff_bm25[i]
-        i+=1 
-    # we have built the dictionary 
-    arranged = sorted([k for k in master_dict],key=lambda k:master_dict[k] , reverse = True ) # The highest RFF SCore 
-    return [chunks[index]["text"] for index in arranged ][:hybdrid_embedding_top_k]
+def RFF_TOP_PICKS(faiss_rows , bm25_rows) :
+    # both inputs are lists of (chunk_id, chunk_text) rows, best match first
+    scores = {}   # chunk_id -> total RFF score
+    texts = {}    # chunk_id -> chunk_text
+    for rows in (faiss_rows , bm25_rows) :
+        for rank , (chunk_id , text) in enumerate(rows , start=1) :
+            scores[chunk_id] = scores.get(chunk_id , 0) + 1/(rank + c_rff_value) # same id in both lists -> scores add up
+            texts[chunk_id] = text
+    arranged = sorted(scores , key=scores.get , reverse=True ) # The highest RFF SCore
+    return [texts[chunk_id] for chunk_id in arranged ][:hybdrid_embedding_top_k]
             
 def reranker(question , chunks, k=5 ) :
     scores = reranker_model.predict(  [  (question , chunk)  for chunk in chunks  ] ) 
@@ -91,7 +82,7 @@ def build_faiss_index( d, file_path=shared_index_path  ,read= False ):
    
     return index 
 
-
+'''   # to be dleted since we are going to use the database 
 def add_chunks_to_index(index ,chunks,vector,user_id_to_chunk_id , user_id , all_chunks ):
     start = index.ntotal 
     v_size = len(vector)
@@ -104,6 +95,7 @@ def add_chunks_to_index(index ,chunks,vector,user_id_to_chunk_id , user_id , all
     save_embedding_index(index)
     # this methods adds the vectors to the index , updataes the list of all chunks , saves the chunks 
     # updates the list of user mpaping 
+'''
 
 def save_embedding_index(index, file_path=shared_index_path) :
     file_path = Path(file_path)  # accept either a str or a Path, use it uniformly from here on
