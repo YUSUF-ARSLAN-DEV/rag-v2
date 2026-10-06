@@ -9,7 +9,7 @@ from fastapi import FastAPI
 
 from chunker import chunk, save_chunks, read_chunks
 from db import hash_text , get_user_chunks  , search_user_vectors
-from embedder import fais_chunks_embedder, populate_index, embed_question, read_embedding_index, save_embedding_index , build_bm25_index, bm25_search , RFF_TOP_PICKS  , reranker , add_chunks_to_index 
+from embedder import fais_chunks_embedder, populate_index, embed_question, read_embedding_index, save_embedding_index , build_bm25_index, bm25_search , RFF_TOP_PICKS  , reranker 
 from document_loader import load_document , save_user_chunk_mapping
 from config import chunk_size, overlap_size, file_paths , activate_hybrid_embedding , hybdrid_embedding_top_k , activate_rerank
 from evaluate import reading_the_golden_set
@@ -228,17 +228,16 @@ def build_index(file_paths):
 
 
 def answer_question(question, user_id , pool  ):
-    embedded_question = np.array([embed_question(question)]).astype("float32")[0] # extracting the list 
-
+    embedded_question = np.array([embed_question(question)]).astype("float32")[0] # extracting the list
 
 
     all_chunks_for_user = get_user_chunks(pool,user_id )
-    bm25 = build_bm25_index(all_chunks_for_user ) 
-    bm25_indices, _ = bm25_search(bm25, question) # gets embedded inside 
+    bm25 = build_bm25_index(all_chunks_for_user )
+    bm25_indices, _ = bm25_search(bm25, question) # gets embedded inside
     FAISS_TOP = search_user_vectors(pool , user_id , embedded_question,hybdrid_embedding_top_k)
 
-    # positions is a dictionary with chunk id and its position relative to all chunks - so that we perform RFF TOP SELECToin 
-    
+    # positions is a dictionary with chunk id and its position relative to all chunks - so that we perform RFF TOP SELECToin
+
     bm25_top_rows = [all_chunks_for_user[i] for i in bm25_indices ]
 
 

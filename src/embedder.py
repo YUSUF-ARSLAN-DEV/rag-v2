@@ -82,21 +82,6 @@ def build_faiss_index( d, file_path=shared_index_path  ,read= False ):
    
     return index 
 
-'''   # to be dleted since we are going to use the database 
-def add_chunks_to_index(index ,chunks,vector,user_id_to_chunk_id , user_id , all_chunks ):
-    start = index.ntotal 
-    v_size = len(vector)
-    index.add(vector)
-    added_indices = [i for i in range(start,start+v_size)]
-    all_chunks.extend(chunks) 
-    user_id_to_chunk_id.setdefault(str(user_id) , []).extend(added_indices )
-    save_user_chunk_mapping(user_id_to_chunk_id)
-    save_chunks(all_chunks)
-    save_embedding_index(index)
-    # this methods adds the vectors to the index , updataes the list of all chunks , saves the chunks 
-    # updates the list of user mpaping 
-'''
-
 def save_embedding_index(index, file_path=shared_index_path) :
     file_path = Path(file_path)  # accept either a str or a Path, use it uniformly from here on
     file_path.parent.mkdir(parents=True, exist_ok=True)
