@@ -1,4 +1,5 @@
 import psycopg  as pgre
+from psycopg_pool import ConnectionPool 
 from pgvector.psycopg import register_vector 
 from dotenv import load_dotenv 
 import os 
@@ -12,13 +13,17 @@ def create_connection(conn_string):
     conn = pgre.connect(conn_string)
     register_vector(conn) 
     return conn 
+def create_pool(conn_string) : 
+    return ConnectionPool(conn_string,min_size=2,max_size=5 , configure=register_vector )
+def get_user_chunks(pool , user_id):
+    # borrows a connection only for this query, then returns it to the pool
+    with pool.connection() as conn :
+        return conn.execute("SELECT id,chunk_text FROM chunks WHERE user_id=%s ORDER BY id",(user_id,),).fetchall()
 
-def get_user_chunks(conn , user_id):
-    return  conn.execute("SELECT id,chunk_text FROM chunks WHERE user_id=%s ORDER BY id",(user_id,),).fetchall()
-        
 
-def search_user_vectors(db_connection , user_id , question_vector , k ):
-    return db_connection.execute("SELECT  id , chunk_text FROM chunks WHERE user_id=%s ORDER BY chunk_vector <=> %s LIMIT %s",(user_id,question_vector,k )).fetchall() 
+def search_user_vectors(pool , user_id , question_vector , k ):
+    with pool.connection() as conn :
+        return conn.execute("SELECT  id , chunk_text FROM chunks WHERE user_id=%s ORDER BY chunk_vector <=> %s LIMIT %s",(user_id,question_vector,k )).fetchall()
     
 
 def hash_text(list_of_strings):
