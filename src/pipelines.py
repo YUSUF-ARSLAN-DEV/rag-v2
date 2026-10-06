@@ -6,7 +6,7 @@ import time
 import numpy as np
 
 from chunker import chunk
-from timing import timed
+from timing import timed , log_timings
 from db import hash_text , get_user_chunks  , search_user_vectors
 from embedder import fais_chunks_embedder, populate_index, embed_question, build_bm25_index, bm25_search , RFF_TOP_PICKS  , reranker
 from document_loader import load_document
@@ -221,7 +221,7 @@ def build_index(file_paths):
 
 
 def answer_question(question, user_id , pool  ):
-    timings = {}  # seconds spent in each stage, returned together with the answer
+    timings = {}  # seconds spent in each stage, written to the container log
 
     with timed(timings , "embed_question") :
         embedded_question = np.array([embed_question(question)]).astype("float32")[0] # extracting the list
@@ -252,11 +252,11 @@ def answer_question(question, user_id , pool  ):
     parsed = json.loads(raw)
 
     timings["total"] = round(sum(timings.values()), 3)
-    print(f"[timing] ask: {timings}", flush=True)
+    log_timings("ask", timings)
 
     if parsed["answered"]:
-        return {"answered": True, "answer": parsed["answer"], "reference": parsed["specific_refrence"], "top_chunks": top_chunks, "timings_s": timings}
-    return {"answered": False, "answer": "The model could not answer from the provided documents.", "reference": None, "top_chunks": top_chunks, "timings_s": timings}
+        return {"answered": True, "answer": parsed["answer"], "reference": parsed["specific_refrence"], "top_chunks": top_chunks}
+    return {"answered": False, "answer": "The model could not answer from the provided documents.", "reference": None, "top_chunks": top_chunks}
 
 
 def evaluate_recall_at_5() : 
@@ -299,7 +299,7 @@ def evaluate_recall_at_5() :
 def processing_file_uploads(contents:bytes , file_name:str , user_id , pool ):
     # saves one uploaded document (chunks + vectors) in Postgres, always returns a dict
     # a connection is borrowed from the pool ONLY while we touch the database, not during the slow chunking/embedding
-    timings = {}  # seconds spent in each stage, returned together with the result
+    timings = {}  # seconds spent in each stage, written to the container log
     suffix = os.path.splitext(file_name)[1]
     tmp_path = None
     try :
@@ -317,7 +317,8 @@ def processing_file_uploads(contents:bytes , file_name:str , user_id , pool ):
             with pool.connection() as conn :
                 existing = conn.execute("SELECT 1 FROM documents WHERE user_id = %s AND content_hash = %s",(user_id , content_hash)).fetchone()
         if existing :
-            return {"status":"Skipped" , "message":"This file was already uploaded." , "timings_s":timings}
+            log_timings("upload (skipped duplicate)", timings)
+            return {"status":"Skipped" , "message":"This file was already uploaded."}
 
         with timed(timings , "chunking") :
             chunks = chunk(strings_list , user_id)
@@ -338,8 +339,8 @@ def processing_file_uploads(contents:bytes , file_name:str , user_id , pool ):
         # leaving the with-block commits (or rolls back on an exception) and returns the connection to the pool
 
         timings["total"] = round(sum(timings.values()), 3)
-        print(f"[timing] upload: {timings}", flush=True)
-        return {"status":"Successful" , "chunks_stored":len(rows) , "timings_s":timings}
+        log_timings("upload", timings)
+        return {"status":"Successful" , "chunks_stored":len(rows)}
     except Exception as e :
         return {"status":"Failed" , "message":str(e)}
     finally :
