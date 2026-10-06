@@ -220,9 +220,7 @@ def build_index(file_paths):
     return faiss_index, chunks, bm25
 
 
-def answer_question(question, user_id , pool  ):
-    timings = {}  # seconds spent in each stage, written to the container log
-
+def ask_question_phase1(question, user_id , pool,timings):
     with timed(timings , "embed_question") :
         embedded_question = np.array([embed_question(question)]).astype("float32")[0] # extracting the list
 
@@ -246,11 +244,13 @@ def answer_question(question, user_id , pool  ):
 
     evidence_text = "\n\n".join(top_chunks)
     q_stack = [evidence_text, question, None]
+    return q_stack ,top_chunks
 
+def ask_question_phase2(q_stack,timings,top_chunks) :
     with timed(timings , "llm") :
         raw, _, _, _, _ = askQuestionToLLM(q_stack)  # backend picked by the LLM_BACKEND env var
-    parsed = json.loads(raw)
-
+        parsed = json.loads(raw)
+    
     timings["total"] = round(sum(timings.values()), 3)
     log_timings("ask", timings)
 
@@ -258,6 +258,13 @@ def answer_question(question, user_id , pool  ):
         return {"answered": True, "answer": parsed["answer"], "reference": parsed["specific_refrence"], "top_chunks": top_chunks}
     return {"answered": False, "answer": "The model could not answer from the provided documents.", "reference": None, "top_chunks": top_chunks}
 
+    
+def answer_question( question, user_id , pool ):
+    timings = {}  # seconds spent in each stage, written to the container log
+
+    q_stack,top_chunks = ask_question_phase1(question , user_id , pool,timings  ) 
+    return  ask_question_phase2(q_stack , timings,top_chunks ) # returns the JSON 
+    
 
 def evaluate_recall_at_5() : 
     index , chunks , bm25 = manual_initialization_pipeline(file_paths,activate_hybrid_embedding,False ) # returns a populated FAISS index, the chunks, and a BM25 index
