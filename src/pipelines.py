@@ -6,6 +6,7 @@ import time
 import numpy as np
 
 from chunker import chunk
+from timing import timed
 from db import hash_text , get_user_chunks  , search_user_vectors
 from embedder import fais_chunks_embedder, populate_index, embed_question, build_bm25_index, bm25_search , RFF_TOP_PICKS  , reranker
 from document_loader import load_document
@@ -220,32 +221,42 @@ def build_index(file_paths):
 
 
 def answer_question(question, user_id , pool  ):
-    embedded_question = np.array([embed_question(question)]).astype("float32")[0] # extracting the list
+    timings = {}  # seconds spent in each stage, returned together with the answer
 
+    with timed(timings , "embed_question") :
+        embedded_question = np.array([embed_question(question)]).astype("float32")[0] # extracting the list
 
-    all_chunks_for_user = get_user_chunks(pool,user_id )
-    bm25 = build_bm25_index(all_chunks_for_user )
-    bm25_indices, _ = bm25_search(bm25, question) # gets embedded inside
-    FAISS_TOP = search_user_vectors(pool , user_id , embedded_question,hybdrid_embedding_top_k)
+    with timed(timings , "db_read_chunks") :
+        all_chunks_for_user = get_user_chunks(pool,user_id )
 
-    # positions is a dictionary with chunk id and its position relative to all chunks - so that we perform RFF TOP SELECToin
+    with timed(timings , "bm25") :
+        bm25 = build_bm25_index(all_chunks_for_user )
+        bm25_indices, _ = bm25_search(bm25, question) # gets embedded inside
+        bm25_top_rows = [all_chunks_for_user[i] for i in bm25_indices ]
 
-    bm25_top_rows = [all_chunks_for_user[i] for i in bm25_indices ]
+    with timed(timings , "vector_search") :
+        FAISS_TOP = search_user_vectors(pool , user_id , embedded_question,hybdrid_embedding_top_k)
 
+    with timed(timings , "rrf_fusion") :
+        hybrid_chunks = RFF_TOP_PICKS(FAISS_TOP, bm25_top_rows)
 
-    hybrid_chunks = RFF_TOP_PICKS(FAISS_TOP, bm25_top_rows)
-    reranked = reranker(question, hybrid_chunks)
+    with timed(timings , "rerank") :
+        reranked = reranker(question, hybrid_chunks)
     top_chunks = [r[0] for r in reranked]
 
     evidence_text = "\n\n".join(top_chunks)
     q_stack = [evidence_text, question, None]
 
-    raw, _, _, _, _ = askQuestionToLLM(q_stack)  # backend picked by the LLM_BACKEND env var
+    with timed(timings , "llm") :
+        raw, _, _, _, _ = askQuestionToLLM(q_stack)  # backend picked by the LLM_BACKEND env var
     parsed = json.loads(raw)
 
+    timings["total"] = round(sum(timings.values()), 3)
+    print(f"[timing] ask: {timings}", flush=True)
+
     if parsed["answered"]:
-        return {"answered": True, "answer": parsed["answer"], "reference": parsed["specific_refrence"], "top_chunks": top_chunks}
-    return {"answered": False, "answer": "The model could not answer from the provided documents.", "reference": None, "top_chunks": top_chunks}
+        return {"answered": True, "answer": parsed["answer"], "reference": parsed["specific_refrence"], "top_chunks": top_chunks, "timings_s": timings}
+    return {"answered": False, "answer": "The model could not answer from the provided documents.", "reference": None, "top_chunks": top_chunks, "timings_s": timings}
 
 
 def evaluate_recall_at_5() : 
@@ -288,6 +299,7 @@ def evaluate_recall_at_5() :
 def processing_file_uploads(contents:bytes , file_name:str , user_id , pool ):
     # saves one uploaded document (chunks + vectors) in Postgres, always returns a dict
     # a connection is borrowed from the pool ONLY while we touch the database, not during the slow chunking/embedding
+    timings = {}  # seconds spent in each stage, returned together with the result
     suffix = os.path.splitext(file_name)[1]
     tmp_path = None
     try :
@@ -296,29 +308,38 @@ def processing_file_uploads(contents:bytes , file_name:str , user_id , pool ):
             tmp.write(contents)
             tmp_path = tmp.name
 
-        strings_list = load_document([tmp_path])
-        content_hash = hash_text(strings_list)
+        with timed(timings , "load_and_hash") :
+            strings_list = load_document([tmp_path])
+            content_hash = hash_text(strings_list)
 
         # same user + same content = already uploaded, skip the slow chunking/embedding
-        with pool.connection() as conn :
-            existing = conn.execute("SELECT 1 FROM documents WHERE user_id = %s AND content_hash = %s",(user_id , content_hash)).fetchone()
+        with timed(timings , "duplicate_check") :
+            with pool.connection() as conn :
+                existing = conn.execute("SELECT 1 FROM documents WHERE user_id = %s AND content_hash = %s",(user_id , content_hash)).fetchone()
         if existing :
-            return {"status":"Skipped" , "message":"This file was already uploaded."}
+            return {"status":"Skipped" , "message":"This file was already uploaded." , "timings_s":timings}
 
-        chunks = chunk(strings_list , user_id)
+        with timed(timings , "chunking") :
+            chunks = chunk(strings_list , user_id)
         if not chunks :
             return {"status":"Failed" , "message":"No text could be extracted from this file."}
-        vectors = fais_chunks_embedder(chunks)  # the document vectorized
+
+        with timed(timings , "embedding") :
+            vectors = fais_chunks_embedder(chunks)  # the document vectorized
 
         # one transaction: the document row + all its chunks, saved together or not at all
-        with pool.connection() as conn :
-            doc_id = conn.execute("INSERT INTO documents (user_id,filename,content_hash) VALUES (%s,%s,%s) RETURNING id ",(user_id , file_name , content_hash)).fetchone()[0]
-            rows = [(user_id , doc_id , c["text"] , v) for c , v in zip(chunks , vectors)]
-            sql_statement = "INSERT INTO chunks (user_id,document_id,chunk_text,chunk_vector) VALUES (%s,%s,%s,%s)"
-            with conn.cursor() as cur :
-                cur.executemany(sql_statement , rows)
+        with timed(timings , "db_insert") :
+            with pool.connection() as conn :
+                doc_id = conn.execute("INSERT INTO documents (user_id,filename,content_hash) VALUES (%s,%s,%s) RETURNING id ",(user_id , file_name , content_hash)).fetchone()[0]
+                rows = [(user_id , doc_id , c["text"] , v) for c , v in zip(chunks , vectors)]
+                sql_statement = "INSERT INTO chunks (user_id,document_id,chunk_text,chunk_vector) VALUES (%s,%s,%s,%s)"
+                with conn.cursor() as cur :
+                    cur.executemany(sql_statement , rows)
         # leaving the with-block commits (or rolls back on an exception) and returns the connection to the pool
-        return {"status":"Successful" , "chunks_stored":len(rows)}
+
+        timings["total"] = round(sum(timings.values()), 3)
+        print(f"[timing] upload: {timings}", flush=True)
+        return {"status":"Successful" , "chunks_stored":len(rows) , "timings_s":timings}
     except Exception as e :
         return {"status":"Failed" , "message":str(e)}
     finally :
