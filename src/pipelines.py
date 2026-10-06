@@ -3,14 +3,12 @@ import re
 import json
 from collections import Counter
 import time 
-import faiss
 import numpy as np
-from fastapi import FastAPI 
 
-from chunker import chunk, save_chunks, read_chunks
+from chunker import chunk
 from db import hash_text , get_user_chunks  , search_user_vectors
-from embedder import fais_chunks_embedder, populate_index, embed_question, read_embedding_index, save_embedding_index , build_bm25_index, bm25_search , RFF_TOP_PICKS  , reranker 
-from document_loader import load_document , save_user_chunk_mapping
+from embedder import fais_chunks_embedder, populate_index, embed_question, build_bm25_index, bm25_search , RFF_TOP_PICKS  , reranker
+from document_loader import load_document
 from config import chunk_size, overlap_size, file_paths , activate_hybrid_embedding , hybdrid_embedding_top_k , activate_rerank
 from evaluate import reading_the_golden_set
 from model  import askQuestionToAI ,ask_AI_TO_EVALUTE_RESPONSE , ask_CLAUDE_TO_EVALUATE_RESPONSE ,askQuestionToClaude
@@ -55,12 +53,6 @@ def manual_initialization_pipeline(file_paths, activate_hybrid=False,activate_ch
     index = populate_index(embeddings)
 
     return index, chunks, bm25  # bm25 is None when activate_hybrid=False - always 3 values
-
-
-def automatic_initialization_pipeline(index_file_name, chunk_file_name):
-    index = read_embedding_index(index_file_name)  # read the index from disk if it exists
-    chunks = read_chunks(chunk_file_name)
-    return index, chunks
 
 
 # ---------------------------------------------------------------------------
@@ -255,21 +247,6 @@ def answer_question(question, user_id , pool  ):
         return {"answered": True, "answer": parsed["answer"], "reference": parsed["specific_refrence"], "top_chunks": top_chunks}
     return {"answered": False, "answer": "The model could not answer from the provided documents.", "reference": None, "top_chunks": top_chunks}
 
-
-def interactive_question_loop(file_paths= file_paths):
-    print("Building index once...")
-    faiss_index, chunks, bm25 = build_index(file_paths)
-    print(f"Index built: {len(chunks)} chunks.\n")
-
-    while True:
-        question = input("Question (or 'exit'): ").strip()
-        if question.lower() in {"exit", "quit", ""}:
-            break
-        answer, ref = answer_question(question, faiss_index, chunks, bm25)
-        print(f"\nAnswer: {answer}")
-        if ref:
-            print(f"Reference: {ref}")
-        print() 
 
 def evaluate_recall_at_5() : 
     index , chunks , bm25 = manual_initialization_pipeline(file_paths,activate_hybrid_embedding,False ) # returns a populated FAISS index, the chunks, and a BM25 index

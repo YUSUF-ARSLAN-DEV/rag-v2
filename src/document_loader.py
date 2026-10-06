@@ -1,9 +1,7 @@
 from pypdf import PdfReader
-import json 
 import os
 import re
 from docx import Document
-from config import chunk_save_path , USER_CHUNK_MAPPING 
 
 def read_txt(filepath): 
     with open (filepath,"r",encoding= "utf-8") as file :
@@ -86,32 +84,4 @@ def load_document(file_path ):
         else : 
             raise FileNotFoundError(f"The file {path} does not exist.")        
         # just makesing sure it is not empty 
-    return strings 
-
-
-def read_user_chunk_mapping():
-    mapping_dictionary = None 
-    if os.path.exists(USER_CHUNK_MAPPING) and os.path.getsize(USER_CHUNK_MAPPING) > 0 :
-         with open (USER_CHUNK_MAPPING , "r" , encoding="utf-8") as f : 
-            mapping_dictionary = json.load(f) 
-    else : 
-        with open (USER_CHUNK_MAPPING , "w" , encoding="utf-8") as f : 
-            mapping_dictionary =  {}
-            json.dump({},f)
-    return mapping_dictionary 
-
-def save_user_chunk_mapping(mapping) :
-    if os.path.exists(USER_CHUNK_MAPPING) :
-        with open (USER_CHUNK_MAPPING,"w",encoding="utf-8") as f : 
-           json.dump(mapping,f)
-
-def read_chunk_history(): 
-    chunk_dictionary_list = None 
-    if os.path.exists(chunk_save_path) and os.path.getsize(chunk_save_path) > 0 :
-        with open (chunk_save_path , "r" , encoding="utf-8") as f : 
-            chunk_dictionary_list = json.load(f) 
-    else : 
-        with open (chunk_save_path , "w" , encoding="utf-8") as f : 
-            chunk_dictionary_list  =  []
-            json.dump([],f)
-    return chunk_dictionary_list 
+    return strings

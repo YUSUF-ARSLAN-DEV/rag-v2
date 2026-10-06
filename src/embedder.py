@@ -1,11 +1,9 @@
-import os
 from rank_bm25 import BM25Okapi
 from sentence_transformers  import SentenceTransformer , CrossEncoder 
 import faiss
-from pathlib import Path 
-from document_loader import load_document , save_user_chunk_mapping
-from chunker import chunk  , save_chunks 
-from config import hybdrid_embedding_top_k  ,c_rff_value , index_dimension , chunk_save_path  , shared_index_path 
+from document_loader import load_document
+from chunker import chunk
+from config import hybdrid_embedding_top_k  ,c_rff_value
 
 model = SentenceTransformer("BAAI/bge-large-en-v1.5")
 reranker_model = CrossEncoder("BAAI/bge-reranker-base")
@@ -63,37 +61,4 @@ def populate_index(twodarray): # this method  returns a populated faiss index
     index = faiss.IndexFlatL2(d) # 384 dimensions  - aka d 
     twodarray = twodarray.astype("float32")
     index.add(twodarray) 
-    return index  # now we have a populated index 
-
-
-def build_faiss_index( d, file_path=shared_index_path  ,read= False ):
-    index = None 
-    # checking if the file exists 
-   
-    if read == True : 
-        if os.path.exists(file_path) :
-            index = read_embedding_index(file_path)
-        else :
-            read = False 
-            
-    if read == False :  
-        index = faiss.IndexFlatL2(d)
-
-   
-    return index 
-
-def save_embedding_index(index, file_path=shared_index_path) :
-    file_path = Path(file_path)  # accept either a str or a Path, use it uniformly from here on
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    faiss.write_index(index, str(file_path))  # faiss's C++ binding wants a plain str, not a Path
-    print(f"Index saved successfully at {file_path}")
-
-
-def read_embedding_index(file_path=shared_index_path) :
-    file_path = Path(file_path)
-    if not file_path.is_file() :
-        print(f"The file {file_path} does not exist. Please save the index first before trying to read it.")
-        return None
-    return faiss.read_index(str(file_path))
-
-
+    return index  # now we have a populated index

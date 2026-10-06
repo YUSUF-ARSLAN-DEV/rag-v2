@@ -9,3 +9,6 @@ TOMYSELF/
 CLAUDE.md
 graphify-out/
 src/db_test
+
+INDEX_STATE/
+VECTOR_EMBEDDING/
