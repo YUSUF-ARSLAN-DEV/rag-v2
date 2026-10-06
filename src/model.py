@@ -14,7 +14,7 @@ ANSWERER_SYSTEM_PROMPT = "You answer strictly and only from the CONTEXT provided
 
 JUDGE_SYSTEM_PROMPT = "You are an AI evlauation engineer , of the highest skilll and rank , working on evaluating the reponse of  a model , the model is given a piece of context and a question then it is asked to answer the question using the context , your job is to inspect the question , the context , and make judgement on wether the model answered correctly using the context you will have the schema that you must fill provided to you "
 
-CLAUDE_MODEL_NAME = "claude-sonnet-5"
+CLAUDE_MODEL_NAME = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")  # override with a cheaper model for the deployed demo
 
 
 def get_claude_client():
@@ -188,6 +188,52 @@ def askQuestionToClaude(q_stack, local=False):  # local kept for signature parit
     )
     TheAIResponse = json.dumps(result)  # keep the downstream contract: a JSON string with answer/answered
     return TheAIResponse , client , CLAUDE_MODEL_NAME , refrence_text , question
+
+
+# ---------------------------------------------------------------------------
+# Gemini backend - Google exposes an OpenAI-compatible endpoint, so the same OpenAI client
+# works with a different base_url + key. Same inputs and return shape as askQuestionToAI.
+# Env: GEMINI_API_KEY (required), GEMINI_MODEL (optional, pick a cheap "flash" model).
+# ---------------------------------------------------------------------------
+
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+
+def askQuestionToGemini(q_stack, local=False):  # local kept for signature parity, ignored
+    model_name = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
+    print(f"Sending your Queries to GEMINI ({model_name})")
+    refrence_text = q_stack[0]
+    question = q_stack[1]
+    client = OpenAI(base_url=GEMINI_BASE_URL, api_key=os.getenv("GEMINI_API_KEY"))
+    response = client.chat.completions.create(
+        model=model_name,
+        temperature=0,
+        messages=[
+            {"role": "system", "content": ANSWERER_SYSTEM_PROMPT},
+            {"role": "user", "content": f"CONTEXT:\n{refrence_text}\n\nQUESTION:\n{question}"},
+        ],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {"name": "answer", "schema": define_LLM_EVALUATION_SCHEMA(1)},
+        },
+    )
+    TheAIResponse = response.choices[0].message.content
+    return TheAIResponse , client , model_name , refrence_text , question
+
+
+# ---------------------------------------------------------------------------
+# One switch for the whole app: LLM_BACKEND = ollama (default) | claude | gemini
+# Every backend returns the same 5-tuple, so callers never care which one ran.
+# ---------------------------------------------------------------------------
+
+def askQuestionToLLM(q_stack):
+    backend = os.getenv("LLM_BACKEND", "ollama").strip().lower()
+    if backend == "gemini":
+        return askQuestionToGemini(q_stack)
+    if backend == "claude":
+        return askQuestionToClaude(q_stack)
+    if backend == "ollama":
+        return askQuestionToAI(q_stack, local=True)
+    raise ValueError(f"Unknown LLM_BACKEND '{backend}'. Use ollama, claude or gemini.")
 
 
 def ask_CLAUDE_TO_EVALUATE_RESPONSE(response , client , model_name , refrence_text , question , expected_answer ):

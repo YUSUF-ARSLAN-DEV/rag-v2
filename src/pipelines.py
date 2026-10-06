@@ -11,7 +11,7 @@ from embedder import fais_chunks_embedder, populate_index, embed_question, build
 from document_loader import load_document
 from config import chunk_size, overlap_size, file_paths , activate_hybrid_embedding , hybdrid_embedding_top_k , activate_rerank
 from evaluate import reading_the_golden_set
-from model  import askQuestionToAI ,ask_AI_TO_EVALUTE_RESPONSE , ask_CLAUDE_TO_EVALUATE_RESPONSE ,askQuestionToClaude
+from model  import askQuestionToAI ,ask_AI_TO_EVALUTE_RESPONSE , ask_CLAUDE_TO_EVALUATE_RESPONSE ,askQuestionToClaude , askQuestionToLLM
 import tempfile 
 
 # ---------------------------------------------------------------------------
@@ -240,7 +240,7 @@ def answer_question(question, user_id , pool  ):
     evidence_text = "\n\n".join(top_chunks)
     q_stack = [evidence_text, question, None]
 
-    raw, _, _, _, _ = askQuestionToAI(q_stack, local=True)
+    raw, _, _, _, _ = askQuestionToLLM(q_stack)  # backend picked by the LLM_BACKEND env var
     parsed = json.loads(raw)
 
     if parsed["answered"]:
