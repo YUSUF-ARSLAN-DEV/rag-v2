@@ -10,6 +10,7 @@ configs = [
     {"name": "b_hybrid_no_rerank",  "use_bm25": True,  "use_rerank": False, "top_k": 20},
     {"name": "c_hybrid_rerank_k20", "use_bm25": True,  "use_rerank": True,  "top_k": 20},
     {"name": "d_hybrid_rerank_k10", "use_bm25": True,  "use_rerank": True,  "top_k": 10},
+    {"name": "e_hybrid_rerank_k40", "use_bm25": True,  "use_rerank": True,  "top_k": 40},
 ]
 
 for cfg in configs :

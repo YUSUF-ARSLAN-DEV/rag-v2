@@ -12,3 +12,6 @@ src/db_test
 
 INDEX_STATE/
 VECTOR_EMBEDDING/
+
+mlruns/
+mlflow.db
