@@ -63,7 +63,7 @@ def manual_initialization_pipeline(file_paths, activate_hybrid=False,activate_ch
 #  "source_snippet": "verbatim quote" or ["quote 1", "quote 2", ...]}
 # ---------------------------------------------------------------------------
 
-def eval_set_loader(path="test_sets/eval_set_one.json"):
+def eval_set_loader(path="src/test_sets/eval_set_one.json"):
     questions = []
     n_question = 0 
     with open(path, "r", encoding="utf-8") as f:
@@ -276,6 +276,7 @@ def evaluate_recall_at_5(user_id=999):
     question_set , _ = eval_set_loader()  # list of dicts, one per question
     pool = create_pool(conn_string)
     hits = 0
+    missed_questions = [] 
     answerable = 0
     try :
         for item in question_set :
@@ -288,12 +289,12 @@ def evaluate_recall_at_5(user_id=999):
             if snippets_hit(item["source_snippet"] , top_chunks) :
                 hits += 1
             else :
-                print("MISS:" , item["question"])
+                missed_questions.append(item["question"])
     finally :
         pool.close()
-    recall = hits / answerable
-    print(f"recall@5: {recall*100:.1f}%  ({hits}/{answerable} answerable questions)")
-    return recall
+    recall_at_5 = hits / answerable
+    results  = {"recall":recall_at_5 , "hits":hits , "answerable_question_count":answerable , "missed_questions":missed_questions }
+    return results
 
 
 def processing_file_uploads(contents:bytes , file_name:str , user_id , pool ):

@@ -22,7 +22,7 @@ index_dimension = 1024
 
 BASE_PATH =Path(__file__).resolve().parent.parent # this finds this file parent directory parent
 
-chunk_save_path = BASE_PATH/"INDEX_STATE"/"all_chunks.json"
+
 TEMPORARY_FILE_SAVING=BASE_PATH/"temporary_file_dic"
 # keep these here for now to save time 
 # r"C:\Users\aonli\Desktop\Books That I am Reading- IN SHA ALLAH\Programming Books\Introduction to Machine Learning with Python ( PDFDrive.com )-min.pdf",
