@@ -35,7 +35,7 @@ def embed_question(question) :
     question_vector = model.encode(question,show_progress_bar=True) 
     return question_vector 
 
-def RFF_TOP_PICKS(faiss_rows , bm25_rows) :
+def RFF_TOP_PICKS(faiss_rows , bm25_rows , limit=hybdrid_embedding_top_k) :
     # both inputs are lists of (chunk_id, chunk_text) rows, best match first
     scores = {}   # chunk_id -> total RFF score
     texts = {}    # chunk_id -> chunk_text
@@ -44,7 +44,7 @@ def RFF_TOP_PICKS(faiss_rows , bm25_rows) :
             scores[chunk_id] = scores.get(chunk_id , 0) + 1/(rank + c_rff_value) # same id in both lists -> scores add up
             texts[chunk_id] = text
     arranged = sorted(scores , key=scores.get , reverse=True ) # The highest RFF SCore
-    return [texts[chunk_id] for chunk_id in arranged ][:hybdrid_embedding_top_k]
+    return [texts[chunk_id] for chunk_id in arranged ][:limit]
             
 def reranker(question , chunks, k=5 ) :
     scores = reranker_model.predict(  [  (question , chunk)  for chunk in chunks  ] ) 

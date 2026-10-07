@@ -221,27 +221,34 @@ def build_index(file_paths):
     return faiss_index, chunks, bm25
 
 
-def ask_question_phase1(question, user_id , pool , timings , eval_mode=False):
+def ask_question_phase1(question, user_id , pool , timings , eval_mode=False ,
+                        use_bm25=True , use_rerank=True , top_k=hybdrid_embedding_top_k):
+    # use_bm25 / use_rerank / top_k are experiment switches; the defaults = the behavior the API always had
     with timed(timings , "embed_question") :
         embedded_question = np.array([embed_question(question)]).astype("float32")[0] # extracting the list
 
-    with timed(timings , "db_read_chunks") :
-        all_chunks_for_user = get_user_chunks(pool,user_id )
+    bm25_top_rows = []
+    if use_bm25 :
+        with timed(timings , "db_read_chunks") :
+            all_chunks_for_user = get_user_chunks(pool,user_id )
 
-    with timed(timings , "bm25") :
-        bm25 = build_bm25_index(all_chunks_for_user )
-        bm25_indices, _ = bm25_search(bm25, question) # gets embedded inside
-        bm25_top_rows = [all_chunks_for_user[i] for i in bm25_indices ]
+        with timed(timings , "bm25") :
+            bm25 = build_bm25_index(all_chunks_for_user )
+            bm25_indices, _ = bm25_search(bm25, question) # gets embedded inside
+            bm25_top_rows = [all_chunks_for_user[i] for i in bm25_indices ]
 
     with timed(timings , "vector_search") :
-        FAISS_TOP = search_user_vectors(pool , user_id , embedded_question,hybdrid_embedding_top_k)
+        FAISS_TOP = search_user_vectors(pool , user_id , embedded_question,top_k)
 
     with timed(timings , "rrf_fusion") :
-        hybrid_chunks = RFF_TOP_PICKS(FAISS_TOP, bm25_top_rows)
+        hybrid_chunks = RFF_TOP_PICKS(FAISS_TOP, bm25_top_rows , top_k)  # no BM25 rows -> just the vector order
 
-    with timed(timings , "rerank") :
-        reranked = reranker(question, hybrid_chunks)
-    top_chunks = [r[0] for r in reranked]
+    if use_rerank :
+        with timed(timings , "rerank") :
+            reranked = reranker(question, hybrid_chunks)
+        top_chunks = [r[0] for r in reranked]
+    else :
+        top_chunks = hybrid_chunks[:5]  # no reranker: keep the fused order, take the top 5
 
     if eval_mode :
         return top_chunks  # the eval only needs the retrieved chunks, not the LLM prompt
@@ -270,7 +277,7 @@ def answer_question( question, user_id , pool ):
     return  ask_question_phase2(q_stack , timings,top_chunks ) # returns the JSON 
     
 
-def evaluate_recall_at_5(user_id=999):
+def evaluate_recall_at_5(user_id=999 , **retrieval_switches):  # switches: use_bm25, use_rerank, top_k
     # recall@5 = fraction of answerable questions whose gold snippet(s) appear in the top-5 retrieved chunks
     # runs directly (not through the API) against the SAME Postgres data and retrieval code the API uses
     question_set , _ = eval_set_loader()  # list of dicts, one per question
@@ -283,7 +290,7 @@ def evaluate_recall_at_5(user_id=999):
             if item["is_impossible"] :
                 continue  # impossible questions have no source chunk, so recall does not apply to them
             answerable += 1
-            top_chunks = ask_question_phase1(item["question"].strip() , user_id , pool , {} , eval_mode=True)
+            top_chunks = ask_question_phase1(item["question"].strip() , user_id , pool , {} , eval_mode=True , **retrieval_switches)
             # snippets_hit lowercases and strips everything except letters/digits on both sides (the PDF
             # hyphenation/curly-quote fix), then checks EVERY snippet appears in at least one retrieved chunk
             if snippets_hit(item["source_snippet"] , top_chunks) :
