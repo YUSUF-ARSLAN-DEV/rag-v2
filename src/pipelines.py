@@ -7,7 +7,7 @@ import numpy as np
 
 from chunker import chunk
 from timing import timed , log_timings
-from db import hash_text , get_user_chunks  , search_user_vectors
+from db import hash_text , get_user_chunks  , search_user_vectors , create_pool ,conn_string
 from embedder import fais_chunks_embedder, populate_index, embed_question, build_bm25_index, bm25_search , RFF_TOP_PICKS  , reranker
 from document_loader import load_document
 from config import chunk_size, overlap_size, file_paths , activate_hybrid_embedding , hybdrid_embedding_top_k , activate_rerank
@@ -65,6 +65,7 @@ def manual_initialization_pipeline(file_paths, activate_hybrid=False,activate_ch
 
 def eval_set_loader(path="test_sets/eval_set_one.json"):
     questions = []
+    n_question = 0 
     with open(path, "r", encoding="utf-8") as f:
         for line_number, line in enumerate(f, start=1):
             line = line.strip()
@@ -74,11 +75,11 @@ def eval_set_loader(path="test_sets/eval_set_one.json"):
                 questions.append(json.loads(line))
             except json.JSONDecodeError as e:
                 raise ValueError(f"{path}:{line_number} is not valid JSON: {e}") from e
-    return questions
+    return questions , len(questions)
 
 
 # ---------------------------------------------------------------------------
-# Generation eval — shared loop: retrieve -> ask -> judge -> tally -> cross-tab.
+# Generation po — shared loop: retrieve -> ask -> judge -> tally -> cross-tab.
 # main() runs it against the server/local model; Checking_claude() against Claude.
 # Both `ask_fn` and `judge_fn` must match askQuestionToAI / ask_AI_TO_EVALUTE_RESPONSE's
 # signatures and return shapes (see model.py).
@@ -220,7 +221,7 @@ def build_index(file_paths):
     return faiss_index, chunks, bm25
 
 
-def ask_question_phase1(question, user_id , pool,timings):
+def ask_question_phase1(question, user_id , pool , timings , eval_mode=False):
     with timed(timings , "embed_question") :
         embedded_question = np.array([embed_question(question)]).astype("float32")[0] # extracting the list
 
@@ -241,6 +242,9 @@ def ask_question_phase1(question, user_id , pool,timings):
     with timed(timings , "rerank") :
         reranked = reranker(question, hybrid_chunks)
     top_chunks = [r[0] for r in reranked]
+
+    if eval_mode :
+        return top_chunks  # the eval only needs the retrieved chunks, not the LLM prompt
 
     evidence_text = "\n\n".join(top_chunks)
     q_stack = [evidence_text, question, None]
@@ -266,42 +270,31 @@ def answer_question( question, user_id , pool ):
     return  ask_question_phase2(q_stack , timings,top_chunks ) # returns the JSON 
     
 
-def evaluate_recall_at_5() : 
-    index , chunks , bm25 = manual_initialization_pipeline(file_paths,activate_hybrid_embedding,False ) # returns a populated FAISS index, the chunks, and a BM25 index
-    list_of_questions_and_answers = eval_set_loader()
-    total_5 = 0
-    hitat5 = 0
-    for  dictionary in list_of_questions_and_answers :
-        question_string = dictionary["question"]
+def evaluate_recall_at_5(user_id=999):
+    # recall@5 = fraction of answerable questions whose gold snippet(s) appear in the top-5 retrieved chunks
+    # runs directly (not through the API) against the SAME Postgres data and retrieval code the API uses
+    question_set , _ = eval_set_loader()  # list of dicts, one per question
+    pool = create_pool(conn_string)
+    hits = 0
+    answerable = 0
+    try :
+        for item in question_set :
+            if item["is_impossible"] :
+                continue  # impossible questions have no source chunk, so recall does not apply to them
+            answerable += 1
+            top_chunks = ask_question_phase1(item["question"].strip() , user_id , pool , {} , eval_mode=True)
+            # snippets_hit lowercases and strips everything except letters/digits on both sides (the PDF
+            # hyphenation/curly-quote fix), then checks EVERY snippet appears in at least one retrieved chunk
+            if snippets_hit(item["source_snippet"] , top_chunks) :
+                hits += 1
+            else :
+                print("MISS:" , item["question"])
+    finally :
+        pool.close()
+    recall = hits / answerable
+    print(f"recall@5: {recall*100:.1f}%  ({hits}/{answerable} answerable questions)")
+    return recall
 
-        embedded_question = np.array(embed_question(question_string)).reshape(1, -1)
-        _  , indices = index.search(embedded_question,k=hybdrid_embedding_top_k)
-        if activate_hybrid_embedding :
-            top_k,_ = bm25_search(bm25 ,question_string)
-            # after getting the bm25 one we start calculating the RFF
-            retrieved_chunks = RFF_TOP_PICKS(indices[0],top_k,chunks)
-        else : retrieved_chunks = [chunks[i]["text"] for i in indices[0]]
-
-
-        # on Top of hybrid embeddings we are going to Apply reranking
-        if activate_rerank :
-            reranked = reranker(question_string,retrieved_chunks)
-            filtered_chunks = [r[0] for r in reranked ]
-        else :
-            filtered_chunks = retrieved_chunks 
-
-
-
-
-        if snippets_hit(dictionary["source_snippet"], filtered_chunks):
-            hitat5 += 1
-        total_5 +=1
-
-
-    print(f"hit-rate@5 (= recall@5 here):{(hitat5/total_5)*100} %")
-
-
-###################################### 
 
 def processing_file_uploads(contents:bytes , file_name:str , user_id , pool ):
     # saves one uploaded document (chunks + vectors) in Postgres, always returns a dict
