@@ -47,6 +47,13 @@ def get_user_by_username(pool , username) :
         return conn.execute("SELECT user_id , password_hash FROM users WHERE username=%s",(username,)).fetchone()  # None = no such user
 
 
+def get_user_documents(pool , user_id) :
+    # only the file names of THIS user's uploads, oldest first
+    with pool.connection() as conn :
+        rows = conn.execute("SELECT filename FROM documents WHERE user_id=%s ORDER BY id",(user_id,)).fetchall()
+    return [row[0] for row in rows]
+
+
 def hash_text(list_of_strings):
     joined_strings = " ".join(list_of_strings)  # seperator is # do not change or else ahshing chanes 
     encoded = joined_strings.encode("utf-8")

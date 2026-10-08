@@ -1,7 +1,7 @@
 from fastapi import FastAPI , UploadFile , File , Form , Depends , HTTPException
 from contextlib import asynccontextmanager
 from pipelines import processing_file_uploads, answer_question
-from db import conn_string , create_pool , init_schema , create_user , get_user_by_username
+from db import conn_string , create_pool , init_schema , get_user_documents , create_user , get_user_by_username
 from auth import hash_password , verify_password , create_token , get_current_user
 
 
@@ -42,6 +42,11 @@ def login(username:str = Form(...) , password:str = Form(...)) :
 def upload_file(file:UploadFile = File(...) , user_id:int = Depends(get_current_user)) :
     contents = file.file.read()
     return processing_file_uploads(contents, file.filename , user_id , app.state.pool )
+
+
+@app.get("/documents")
+def list_documents(user_id:int = Depends(get_current_user)) :
+    return {"documents": get_user_documents(app.state.pool , user_id)}
 
 
 @app.post("/ask")
