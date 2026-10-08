@@ -1,7 +1,7 @@
 from fastapi import FastAPI , UploadFile , File , Form , Depends , HTTPException
 from contextlib import asynccontextmanager
 from pipelines import processing_file_uploads, answer_question
-from db import conn_string , create_pool , init_users_table , create_user , get_password_hash
+from db import conn_string , create_pool , init_users_table , create_user , get_user_by_username
 from auth import hash_password , verify_password , create_token , get_current_user
 
 
@@ -17,21 +17,25 @@ app = FastAPI(lifespan=lifespan)
 
 
 @app.post("/register")
-def register(user_id:int = Form(...) , password:str = Form(...)) :
+def register(username:str = Form(...) , password:str = Form(...)) :
+    username = username.strip()
+    if not username :
+        raise HTTPException(status_code=400 , detail="Username cannot be empty")
     if len(password) < 8 :
         raise HTTPException(status_code=400 , detail="Password must be at least 8 characters")
-    if not create_user(app.state.pool , user_id , hash_password(password)) :
-        raise HTTPException(status_code=409 , detail="That user ID is already taken")
-    return {"registered": True , "user_id": user_id}
+    user_id = create_user(app.state.pool , username , hash_password(password))
+    if user_id is None :
+        raise HTTPException(status_code=409 , detail="That username is already taken")
+    return {"registered": True , "username": username}
 
 
 @app.post("/login")
-def login(user_id:int = Form(...) , password:str = Form(...)) :
-    stored_hash = get_password_hash(app.state.pool , user_id)
-    # same message for "no such user" and "wrong password" so the API doesn't reveal which IDs exist
-    if stored_hash is None or not verify_password(password , stored_hash) :
-        raise HTTPException(status_code=401 , detail="Wrong user ID or password")
-    return {"access_token": create_token(user_id) , "token_type": "bearer"}
+def login(username:str = Form(...) , password:str = Form(...)) :
+    user = get_user_by_username(app.state.pool , username.strip())
+    # same message for "no such user" and "wrong password" so the API doesn't reveal which usernames exist
+    if user is None or not verify_password(password , user[1]) :
+        raise HTTPException(status_code=401 , detail="Wrong username or password")
+    return {"access_token": create_token(user[0]) , "token_type": "bearer"}  # the token carries the internal user_id
 
 
 @app.post("/upload")
