@@ -1,14 +1,14 @@
 from fastapi import FastAPI , UploadFile , File , Form , Depends , HTTPException
 from contextlib import asynccontextmanager
 from pipelines import processing_file_uploads, answer_question
-from db import conn_string , create_pool , init_users_table , create_user , get_user_by_username
+from db import conn_string , create_pool , init_schema , create_user , get_user_by_username
 from auth import hash_password , verify_password , create_token , get_current_user
 
 
 @asynccontextmanager
 async def lifespan(app:FastAPI) :
+    init_schema(conn_string)  # creates the extension + tables on a fresh database
     app.state.pool = create_pool(conn_string)  # one pool for the whole app, connections are borrowed per query
-    init_users_table(app.state.pool)
     yield
     app.state.pool.close()
 
@@ -18,7 +18,7 @@ app = FastAPI(lifespan=lifespan)
 
 @app.post("/register")
 def register(username:str = Form(...) , password:str = Form(...)) :
-    username = username.strip()
+    username = username.strip().lower()  # lowercase so "Yusuf" and "yusuf" count as the same username
     if not username :
         raise HTTPException(status_code=400 , detail="Username cannot be empty")
     if len(password) < 8 :
@@ -31,7 +31,7 @@ def register(username:str = Form(...) , password:str = Form(...)) :
 
 @app.post("/login")
 def login(username:str = Form(...) , password:str = Form(...)) :
-    user = get_user_by_username(app.state.pool , username.strip())
+    user = get_user_by_username(app.state.pool , username.strip().lower())
     # same message for "no such user" and "wrong password" so the API doesn't reveal which usernames exist
     if user is None or not verify_password(password , user[1]) :
         raise HTTPException(status_code=401 , detail="Wrong username or password")
