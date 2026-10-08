@@ -1,0 +1,12 @@
+test credentials : 
+username :yusuf 
+password :testpass123 
+path_to_test_file:C:\Users\aonli\Desktop\INTERNSHIP PROJECTS\Independent Learning\RAG LEARNING\rag-v2\sample_sources\healthcare-sample-research-paper.pdf
+current_access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzkxNDk0MDAzfQ.ySp3ybhNOO1fcRWRW0CioqD7TWVvKqCwqier8Ez0s2I
+
+
+second user 
+username:second 
+password:testpass456
+current_token:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZXhwIjoxNzkxNDk0NjA1fQ.FJ3CPeFqisfkHPBixhmzgj_cJzuHigj0LvILh61Q4RA
+

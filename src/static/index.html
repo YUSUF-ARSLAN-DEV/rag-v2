@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Document Q&amp;A</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --text: #1c2030; --muted: #6b7185; --line: #e3e6ee;
+    --accent: #4f46e5; --accent-text: #ffffff; --bubble-user: #4f46e5; --bubble-bot: #eef0f6;
+    --danger: #c0392b; --ok: #1e8e5a; --shadow: 0 4px 24px rgba(20,25,50,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #11131a; --panel: #1a1d27; --text: #e8eaf2; --muted: #8b91a7; --line: #2a2e3d;
+      --accent: #7c75ff; --accent-text: #11131a; --bubble-user: #5b54e8; --bubble-bot: #242838;
+      --danger: #ff7b6b; --ok: #4cd08f; --shadow: 0 4px 24px rgba(0,0,0,.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  button, input { font: inherit; color: inherit; }
+  .hidden { display: none !important; }
+
+  /* ---------- sign in ---------- */
+  #auth { min-height: 100%; display: grid; place-items: center; padding: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+          box-shadow: var(--shadow); padding: 32px; width: 100%; max-width: 380px; }
+  .card h1 { margin: 0 0 4px; font-size: 22px; }
+  .card p.sub { margin: 0 0 20px; color: var(--muted); }
+  .tabs { display: flex; gap: 4px; background: var(--bg); padding: 4px; border-radius: 10px; margin-bottom: 18px; }
+  .tabs button { flex: 1; border: 0; background: transparent; padding: 8px; border-radius: 8px; cursor: pointer; color: var(--muted); }
+  .tabs button.active { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+  input[type=text], input[type=password] { width: 100%; padding: 10px 12px; border-radius: 10px;
+          border: 1px solid var(--line); background: var(--bg); outline: none; }
+  input:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+  .btn { border: 0; background: var(--accent); color: var(--accent-text); padding: 10px 16px; border-radius: 10px;
+         cursor: pointer; font-weight: 600; }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); font-weight: 500; }
+  .btn.block { width: 100%; margin-top: 18px; }
+  .msg { min-height: 20px; margin-top: 12px; font-size: 13px; }
+  .msg.err { color: var(--danger); } .msg.ok { color: var(--ok); }
+
+  /* ---------- app ---------- */
+  #app { height: 100%; display: grid; grid-template-columns: 290px 1fr; }
+  aside { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 18px; gap: 14px; min-height: 0; }
+  aside h2 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .who { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 600; }
+  .who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #docs { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; min-height: 0; }
+  #docs li { padding: 9px 10px; border-radius: 8px; font-size: 14px; display: flex; gap: 8px; align-items: baseline; }
+  #docs li:hover { background: var(--bg); }
+  #docs li::before { content: "\1F4C4"; font-size: 13px; }
+  #docs li span { overflow-wrap: anywhere; }
+  .empty { color: var(--muted); font-size: 14px; padding: 9px 10px; }
+  #upload-note { font-size: 13px; min-height: 18px; }
+
+  main { display: flex; flex-direction: column; min-height: 0; }
+  #chat { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+  .row { display: flex; } .row.user { justify-content: flex-end; }
+  .bubble { max-width: min(720px, 85%); padding: 11px 15px; border-radius: 16px; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .user .bubble { background: var(--bubble-user); color: #fff; border-bottom-right-radius: 4px; }
+  .bot .bubble { background: var(--bubble-bot); border-bottom-left-radius: 4px; }
+  .ref { margin-top: 8px; font-size: 13px; color: var(--muted); white-space: normal; }
+  details { margin-top: 8px; white-space: normal; }
+  summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+  .chunk { margin-top: 8px; padding: 8px 10px; border-left: 3px solid var(--accent); background: var(--panel);
+           font-size: 13px; border-radius: 0 8px 8px 0; white-space: pre-wrap; }
+  .hint { margin: auto; text-align: center; color: var(--muted); max-width: 420px; }
+  .hint h3 { color: var(--text); margin: 0 0 6px; }
+  .dots::after { content: ""; animation: dots 1.2s steps(4, end) infinite; }
+  @keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+  @media (prefers-reduced-motion: reduce) { .dots::after { animation: none; content: "..."; } }
+
+  form#ask { display: flex; gap: 10px; padding: 14px 24px 20px; border-top: 1px solid var(--line); background: var(--panel); }
+  form#ask input { flex: 1; }
+
+  @media (max-width: 760px) {
+    #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    aside { border-right: 0; border-bottom: 1px solid var(--line); max-height: 40vh; }
+    #chat { padding: 16px; } form#ask { padding: 12px 16px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ========== sign in / register ========== -->
+<section id="auth">
+  <div class="card">
+    <h1>Document Q&amp;A</h1>
+    <p class="sub">Upload a document, then ask it questions.</p>
+    <div class="tabs" role="tablist">
+      <button type="button" id="tab-login" class="active">Sign in</button>
+      <button type="button" id="tab-register">Create account</button>
+    </div>
+    <form id="auth-form">
+      <label for="username">Username</label>
+      <input id="username" type="text" autocomplete="username" required>
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" minlength="8" required>
+      <button class="btn block" id="auth-submit" type="submit">Sign in</button>
+      <div class="msg" id="auth-msg" role="status"></div>
+    </form>
+  </div>
+</section>
+
+<!-- ========== the app ========== -->
+<section id="app" class="hidden">
+  <aside>
+    <div class="who"><span id="who"></span><button class="btn ghost" id="logout" type="button">Sign out</button></div>
+    <div>
+      <h2>Your documents</h2>
+    </div>
+    <ul id="docs"></ul>
+    <div>
+      <input id="file" type="file" accept=".pdf,.docx,.txt" class="hidden">
+      <button class="btn block" id="upload-btn" type="button" style="margin-top:0">Upload a document</button>
+      <div id="upload-note" class="msg" role="status"></div>
+    </div>
+  </aside>
+
+  <main>
+    <div id="chat" aria-live="polite">
+      <div class="hint" id="hint">
+        <h3>Ask your documents anything</h3>
+        <div>Upload a document on the left, then type a question below.</div>
+      </div>
+    </div>
+    <form id="ask">
+      <input id="question" type="text" placeholder="Ask a question about your documents..." autocomplete="off" required>
+      <button class="btn" id="send" type="submit">Send</button>
+    </form>
+  </main>
+</section>
+
+<script>
+  // The token lives in sessionStorage: it survives a page refresh but is wiped when the tab closes.
+  const TOKEN_KEY = "rag_token", NAME_KEY = "rag_username";
+  const $ = (id) => document.getElementById(id);
+  let mode = "login";
+
+  const getToken = () => { try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; } };
+  const setSession = (token, name) => { try { sessionStorage.setItem(TOKEN_KEY, token); sessionStorage.setItem(NAME_KEY, name); } catch {} };
+  const clearSession = () => { try { sessionStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(NAME_KEY); } catch {} };
+
+  // every call to a protected route goes through here, so the token is attached in ONE place
+  async function api(path, options = {}) {
+    options.headers = { ...(options.headers || {}), Authorization: "Bearer " + getToken() };
+    const res = await fetch(path, options);
+    if (res.status === 401) { signOut("Your session expired. Please sign in again."); throw new Error("unauthorized"); }
+    return res;
+  }
+
+  function showApp() {
+    $("auth").classList.add("hidden"); $("app").classList.remove("hidden");
+    let name = ""; try { name = sessionStorage.getItem(NAME_KEY) || ""; } catch {}
+    $("who").textContent = name;
+    loadDocs();
+  }
+  function signOut(message) {
+    clearSession();
+    $("app").classList.add("hidden"); $("auth").classList.remove("hidden");
+    $("password").value = "";
+    setMsg($("auth-msg"), message || "", "err");
+  }
+  function setMsg(el, text, kind) { el.textContent = text; el.className = "msg " + (kind || ""); }
+
+  /* ---------- sign in / register ---------- */
+  function setMode(m) {
+    mode = m;
+    $("tab-login").classList.toggle("active", m === "login");
+    $("tab-register").classList.toggle("active", m === "register");
+    $("auth-submit").textContent = m === "login" ? "Sign in" : "Create account";
+    $("password").autocomplete = m === "login" ? "current-password" : "new-password";
+    setMsg($("auth-msg"), "");
+  }
+  $("tab-login").onclick = () => setMode("login");
+  $("tab-register").onclick = () => setMode("register");
+
+  async function post(path, fields) {
+    const body = new FormData();
+    for (const [k, v] of Object.entries(fields)) body.append(k, v);
+    const res = await fetch(path, { method: "POST", body });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, data };
+  }
+
+  $("auth-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const username = $("username").value.trim(), password = $("password").value;
+    $("auth-submit").disabled = true; setMsg($("auth-msg"), "");
+    try {
+      if (mode === "register") {
+        const r = await post("/register", { username, password });
+        if (!r.ok) return setMsg($("auth-msg"), r.data.detail || "Could not create the account.", "err");
+      }
+      const r = await post("/login", { username, password });
+      if (!r.ok) return setMsg($("auth-msg"), r.data.detail || "Could not sign in.", "err");
+      setSession(r.data.access_token, username.toLowerCase());
+      showApp();
+    } catch { setMsg($("auth-msg"), "Could not reach the server.", "err"); }
+    finally { $("auth-submit").disabled = false; }
+  };
+  $("logout").onclick = () => signOut("");
+
+  /* ---------- documents ---------- */
+  async function loadDocs() {
+    const ul = $("docs"); ul.replaceChildren();
+    try {
+      const data = await (await api("/documents")).json();
+      if (!data.documents.length) {
+        const d = document.createElement("div"); d.className = "empty"; d.textContent = "Nothing uploaded yet."; ul.append(d); return;
+      }
+      for (const name of data.documents) {
+        const li = document.createElement("li"), s = document.createElement("span");
+        s.textContent = name; li.append(s); ul.append(li);
+      }
+    } catch {}
+  }
+
+  $("upload-btn").onclick = () => $("file").click();
+  $("file").onchange = async () => {
+    const file = $("file").files[0]; if (!file) return;
+    const note = $("upload-note"); $("upload-btn").disabled = true;
+    setMsg(note, "Uploading and indexing “" + file.name + "”. This can take a minute...");
+    try {
+      const body = new FormData(); body.append("file", file);
+      const res = await api("/upload", { method: "POST", body });
+      const data = await res.json();
+      if (data.status === "Successful") setMsg(note, "Added (" + data.chunks_stored + " passages indexed).", "ok");
+      else if (data.status === "Skipped") setMsg(note, data.message, "ok");
+      else setMsg(note, data.message || "Upload failed.", "err");
+      loadDocs();
+    } catch (err) { if (err.message !== "unauthorized") setMsg(note, "Upload failed.", "err"); }
+    finally { $("upload-btn").disabled = false; $("file").value = ""; }
+  };
+
+  /* ---------- chat ---------- */
+  function addRow(kind) {
+    $("hint")?.remove();
+    const row = document.createElement("div"); row.className = "row " + kind;
+    const bubble = document.createElement("div"); bubble.className = "bubble";
+    row.append(bubble); $("chat").append(row); $("chat").scrollTop = $("chat").scrollHeight;
+    return bubble;
+  }
+
+  $("ask").onsubmit = async (e) => {
+    e.preventDefault();
+    const q = $("question").value.trim(); if (!q) return;
+    $("question").value = ""; $("send").disabled = true;
+    addRow("user").textContent = q;
+    const bubble = addRow("bot");
+    const wait = document.createElement("span"); wait.className = "dots"; wait.textContent = "Thinking"; bubble.append(wait);
+    try {
+      const res = await api("/ask?" + new URLSearchParams({ question: q }), { method: "POST" });
+      const data = await res.json();
+      bubble.replaceChildren(); bubble.append(document.createTextNode(data.answer || "No answer."));
+      if (data.reference) { const r = document.createElement("div"); r.className = "ref"; r.textContent = "Source: " + data.reference; bubble.append(r); }
+      if (data.top_chunks && data.top_chunks.length) {
+        const det = document.createElement("details"), sum = document.createElement("summary");
+        sum.textContent = "Show the " + data.top_chunks.length + " passages used"; det.append(sum);
+        for (const c of data.top_chunks) { const d = document.createElement("div"); d.className = "chunk"; d.textContent = c; det.append(d); }
+        bubble.append(det);
+      }
+    } catch (err) { if (err.message !== "unauthorized") bubble.textContent = "Something went wrong. Please try again."; }
+    finally { $("send").disabled = false; $("question").focus(); $("chat").scrollTop = $("chat").scrollHeight; }
+  };
+
+  // already signed in (e.g. after a refresh)? go straight to the app
+  if (getToken()) showApp();
+</script>
+</body>
+</html>

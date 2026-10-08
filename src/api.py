@@ -1,4 +1,6 @@
 from fastapi import FastAPI , UploadFile , File , Form , Depends , HTTPException
+from fastapi.responses import FileResponse
+from pathlib import Path
 from contextlib import asynccontextmanager
 from pipelines import processing_file_uploads, answer_question
 from db import conn_string , create_pool , init_schema , get_user_documents , create_user , get_user_by_username
@@ -14,6 +16,12 @@ async def lifespan(app:FastAPI) :
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.get("/" , include_in_schema=False)
+def home() :
+    # the single-page UI; it talks to the routes below with fetch()
+    return FileResponse(Path(__file__).parent / "static" / "index.html")
 
 
 @app.post("/register")
