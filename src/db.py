@@ -21,6 +21,26 @@ def search_user_vectors(pool , user_id , question_vector , k ):
         return conn.execute("SELECT  id , chunk_text FROM chunks WHERE user_id=%s ORDER BY chunk_vector <=> %s LIMIT %s",(user_id,question_vector,k )).fetchall()
     
 
+def init_users_table(pool) :
+    # runs at app startup; does nothing if the table already exists
+    with pool.connection() as conn :
+        conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY , password_hash TEXT NOT NULL)")
+
+
+def create_user(pool , user_id , password_hash) :
+    # the primary key makes the "does this user exist" check and the insert ONE atomic step
+    # (check-then-insert in two steps would let two simultaneous registrations both pass the check)
+    with pool.connection() as conn :
+        cursor = conn.execute("INSERT INTO users (user_id , password_hash) VALUES (%s,%s) ON CONFLICT (user_id) DO NOTHING",(user_id,password_hash))
+        return cursor.rowcount == 1  # False = this user_id was already taken
+
+
+def get_password_hash(pool , user_id) :
+    with pool.connection() as conn :
+        row = conn.execute("SELECT password_hash FROM users WHERE user_id=%s",(user_id,)).fetchone()
+    return row[0] if row else None  # None = no such user
+
+
 def hash_text(list_of_strings):
     joined_strings = " ".join(list_of_strings)  # seperator is # do not change or else ahshing chanes 
     encoded = joined_strings.encode("utf-8")
