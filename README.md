@@ -1,179 +1,164 @@
 # RAG v3 — Measured, Eval-Driven Document Q&A
 
-A Retrieval-Augmented Generation (RAG) pipeline built with an eval-first discipline: every
-retrieval or prompting change is only kept if it measurably improves a scorecard, never on
-vibes. This repo documents both what worked and what didn't — including the parts that are
-still broken.
+A Retrieval-Augmented Generation (RAG) service built with an eval-first discipline: every
+retrieval change is judged by a number on a hand-written eval set, never on vibes. It runs as
+a FastAPI service in Docker, stores documents in Postgres + pgvector, and tracks every
+retrieval experiment in MLflow. This README also records what didn't work and what is still open.
 
 ## Architecture
 
 ```
-ingest:  load_document -> chunk (token-window) -> embed (dense + BM25) -> FAISS + BM25 index
-query:   question -> embed -> hybrid retrieve (RRF fusion) -> cross-encoder rerank -> LLM answer
-eval:    two harnesses - retrieval metrics (recall@k, MRR) and generation metrics
-         (faithfulness, correctness, refusal-on-unanswerable), both LLM-judged where needed
+upload:  file -> load_document -> chunk (200 tokens, 50 overlap) -> embed (bge-large, 1024-d)
+              -> Postgres (chunks + pgvector), per user_id, duplicate uploads skipped (SHA-256)
+ask:     question -> embed -> BM25 over the user's chunks + pgvector search
+              -> RRF fusion -> cross-encoder rerank -> top 5 chunks -> LLM answer
+eval:    retrieval recall@5 through the same Postgres code path; every config logged to MLflow
 ```
 
-- `document_loader.py` — loads `.pdf` / `.docx` / `.txt` into raw text.
-- `chunker.py` — splits text into fixed-size token windows (tiktoken `cl100k_base`), with overlap.
-- `embedder.py` — dense embeddings (`BAAI/bge-large-en-v1.5`), BM25 keyword index, Reciprocal
-  Rank Fusion (`RFF_TOP_PICKS`), and a cross-encoder reranker (`BAAI/bge-reranker-base`).
-- `model.py` — the LLM layer: an OpenAI-compatible backend (local Ollama or a hosted
-  OpenAI-compatible server) and a Claude (Anthropic API) backend, structurally interchangeable.
-- `pipelines.py` — orchestration: document ingestion, the generation eval loop, chunk
-  enrichment (Contextual Retrieval).
-- `evaluate.py` / `main.py` — retrieval and generation eval entry points.
+- `src/api.py` — FastAPI app: `POST /upload` (file + `user_id`) and `POST /ask` (`question`, `user_id`).
+- `src/db.py` — Postgres access: connection pool, chunk storage, per-user pgvector search.
+- `src/pipelines.py` — orchestration: upload processing, `ask_question_phase1` (retrieval, with
+  `use_bm25` / `use_rerank` / `top_k` switches) and `ask_question_phase2` (LLM), the eval loop.
+- `src/embedder.py` — dense embeddings (`BAAI/bge-large-en-v1.5`), BM25, Reciprocal Rank
+  Fusion, cross-encoder reranker (`BAAI/bge-reranker-base`).
+- `src/model.py` — LLM layer: `LLM_BACKEND` = `ollama` | `claude` | `gemini`, with retry and
+  fallback across models.
+- `src/track_eval.py` — runs the retrieval grid and logs each config as an MLflow run.
+- `src/timing.py` — per-stage timings written to the container log (logger `rag.timing`).
+- `Dockerfile` + `docker-compose.yml` — `api` (port 8003) and `db` (`pgvector/pgvector:pg16`)
+  with persistent volumes for Postgres data and the HuggingFace model cache.
 
-## What's implemented
+## Status
 
-| Phase | Status |
+| Step | Status |
 |---|---|
-| 0 — Foundation (config, provider-agnostic LLM layer, chunk identity) | Done |
-| 1 — Persistence (save/load FAISS index + chunks) | Done |
-| 2 — Evaluation harness (retrieval: recall@1/@5, MRR; generation: faithfulness, correctness, refusal) | Done |
-| 3 — Retrieval upgrades: hybrid search (BM25 + dense, RRF fusion), cross-encoder reranking, Contextual Retrieval | Done, mixed results (see below) |
-| 3 — Sentence/paragraph-aware chunking | Not done (see Limitations) |
-| 3.5 onward — CI-gated eval, intent routing, API, frontend, deployment | Not started |
-
-## Evaluation methodology
-
-Two separate eval sets, used for different purposes:
-
-1. **SQuAD v2 (`squad_gold.json`, 100 Q)** — scaffolding used early on to debug the harness
-   itself (retrieval metrics, LLM-as-judge, refusal tracking). Not used for tuning retrieval —
-   SQuAD's "impossible" labels are calibrated to one exact gold paragraph and don't map cleanly
-   onto an arbitrary retrieved context, which was confirmed directly during this project (see
-   Limitations).
-2. **`eval_set_one.json` (22 Q, hand-written)** — a real eval set built from an actual document
-   (`sample_sources/healthcare-sample-research-paper.pdf`, a nursing-home fall-risk research
-   paper), covering `fact`, `exact_token`, `multi_chunk`, and `impossible` question types. Every
-   answerable row's `expected_answer` is traced back to an exact quote (`source_snippet`) in the
-   source document. This is the set Phase 3 retrieval changes are measured against.
+| FastAPI `/upload` + `/ask` | Done |
+| Docker + compose, volumes, persistence verified | Done |
+| Postgres + pgvector replaces FAISS + JSON files (pool, duplicate skip, per-user isolation) | Done |
+| Provider-agnostic LLM switch with retry/fallback | Done |
+| Stage timings in the container log | Done |
+| Retrieval eval through Postgres + MLflow experiment tracking | Done |
+| GPU passthrough for the embedder/reranker | Not done |
+| Cloud deployment (Azure/AWS) | Not started |
+| Auth, CI-gated eval, frontend | Not started |
 
 ## Results
 
-### Generation quality (SQuAD, 100 Q, qwen3-coder-30b vs. Claude Sonnet 5)
+### Retrieval quality (MLflow, Postgres + pgvector, 19 answerable questions)
+
+Eval set: `src/test_sets/eval_set_one.json`, hand-written from a nursing-home fall-risk
+research paper. 22 questions, 3 are unanswerable and skipped, leaving 19. recall@5 counts a
+question as a hit when every required gold snippet appears in the top-5 retrieved chunks.
+Each config is one run in the `rag-retrieval` experiment (`src/track_eval.py`).
+
+| Config | recall@5 | Hits |
+|---|---|---|
+| a) vector only, top_k 20 | 63.2% | 12/19 |
+| b) vector + BM25 (RRF), no rerank, top_k 20 | 68.4% | 13/19 |
+| c) vector + BM25 + rerank, top_k 20 (**current**) | **94.7%** | 18/19 |
+| d) vector + BM25 + rerank, top_k 10 | 78.9% | 15/19 |
+| e) vector + BM25 + rerank, top_k 40 | 94.7% | 18/19 |
+
+![MLflow run comparison](docs/mlflow_compare.png)
+
+- Reranking is the big lever: +5 questions over b.
+- BM25 over vector-only is +1 question, within noise on this set.
+- Widening the candidate pool from 20 to 40 adds nothing; shrinking it to 10 costs 3 questions.
+- Re-running the whole grid gave identical numbers, so retrieval is deterministic.
+- Caveats: 19 questions (1 question ~ 5 points), one document, one run per config. Claim
+  "about 90-95% recall@5 on a 19-question hand-written set", not a precise figure.
+- The single miss in config c: "Why does the review argue that current fall risk assessment
+  tools are insufficient, and what direction does it recommend for future development?"
+  (a multi-chunk "why / what direction" question). Not yet investigated.
+
+*Earlier baseline (in-memory FAISS, 22 questions including the 3 unanswerable ones): hit@5 =
+90.9% (20/22). Different denominator, so it is not a like-for-like comparison.*
+
+### Latency per `/ask` query
+
+Measured 2026-10-06, Docker Compose stack on a Windows 11 host, CPU-only embedder and
+reranker, one run each (not averaged).
+
+| Stage | Local qwen3.5:9b (Ollama) | Hosted Gemini flash |
+|---|---|---|
+| rerank (CPU cross-encoder) | 1.2 s | 1.7 s |
+| vector search (pgvector) | ~0 s | 0.007 s |
+| LLM call | 57.7 s | 5.5 s |
+| total | ~59 s | 7.8 s |
+
+The LLM call dominates end-to-end latency; retrieval is cheap. Uploading an 87-chunk document
+takes ~63 s on CPU (embedding), which GPU passthrough would reduce. Hosted Gemini sends
+retrieved chunks to Google; Ollama remains the private/local option.
+
+### Generation quality (SQuAD v2, 100 Q, earlier pipeline)
 
 | Backend | Faithfulness | Accuracy | Hallucinated-on-impossible | False-refusal-on-answerable |
 |---|---|---|---|---|
-| qwen3-coder-30b | 88% | ~67% | 23/55 (42%, but ~7% once judge/label noise is separated out) | 6/45 (13%) |
+| qwen3-coder-30b | 88% | ~67% | 23/55 (42%, ~7% once judge/label noise is separated out) | 6/45 (13%) |
 | Claude Sonnet 5 | 96% | 76% | 11/55 (20%, ~7% real fabrication after the same correction) | 9/45 (20%) |
 
-Claude showed meaningfully better false-premise detection at the cost of being more
-conservative (more false refusals). See "Key findings" below for why the raw hallucination
-numbers needed correction before they were trustworthy.
-
-### Retrieval quality (real eval set, 22 Q, hit@5 — strict: every required snippet must be
-in the top-5)
-
-Measured with the normalized matcher (`snippets_hit`, see Key findings). Every one of the 22
-gold snippets exists in the chunk set, so 100% is reachable.
-
-| Configuration | hit@5 |
-|---|---|
-| Dense-only, top-5, no rerank | 63.6% (14/22) |
-| Dense-only, top-20 → rerank → 5 | 72.7% (16/22) |
-| Dense-only, top-50 → rerank → 5 | 77.3% (17/22) |
-| Hybrid (BM25 + dense, RRF fusion), top-5 straight from RRF, no rerank | 72.7% (16/22) |
-| Hybrid + cross-encoder rerank (RRF top-20 → top-5; reranking the full fused list gives the same 81.8%) | 81.8% (18/22) |
-| Hybrid, k=20 per retriever (fused pool up to 40) + rerank → top-5 — **current config** | **90.9%** (20/22) |
-| *Reference:* RRF top-20 shortlist, no rerank (ceiling for the reranker) | 86.4% (19/22) |
-| + Contextual Retrieval (LLM-generated per-chunk blurb prepended before embedding) | Not re-measured with the corrected matcher |
-
-Each stage helps a little: hybrid over dense (+9 points at top-5, +9 with rerank), rerank over
-no rerank (+9 points), and a larger candidate pool helps the reranker (dense: top-5 pool
-63.6% → top-20 72.7% → top-50 77.3%). Reranking adds +2 questions over raw RRF order, and the 4 remaining misses all
-had the gold chunk inside the top-20 shortlist, so the shortlist is not the bottleneck. With
-22 questions (each ~4.5 points) the +2 is suggestive, not conclusive.
-
-*Historical numbers (18.8% dense-only, 36.4% hybrid + rerank) were produced with an
-exact-substring matcher that under-counted; they are superseded by the table above.*
+Measured before the move to Postgres and not re-run since. SQuAD was used to debug the
+harness, not to tune retrieval.
 
 ## Key findings
 
-- **A metric bug can look exactly like a real result.** Early in generation eval, a
-  whitespace mismatch between PDF-extracted text (`\n` at every line-wrap) and plainly-
-  transcribed eval snippets (plain spaces) caused a **0% hit rate across every question**,
-  which looked like a retrieval failure but was actually a string-comparison bug. Fixed by
-  normalizing whitespace at the PDF-extraction source (`document_loader.read_pdf`).
-- **The measuring stick was the biggest bug, twice.** After the whitespace fix, hit@5 still
-  read 27–36% because `snippet in chunk_text` demanded a byte-exact match, while the
-  hand-typed snippets differed from the PDF's raw text in small ways: line-break hyphenation
-  (`moni- toring`), curly vs straight quotes, LaTeX markup and dropped hyphens typed into the
-  snippet. A diagnostic showed 8/22 snippets exact-matched any chunk; with a normalized
-  comparison (`snippets_hit`: lowercase, letters and digits only, applied to both sides,
-  stored text untouched) all 22 do. Same retrieval, hit@5 rose from ~27–36% to 81.8%.
-- **An unbounded candidate list is not "hit@5".** Turning the reranker off in the eval loop
-  passed the *entire* RRF-fused list (65–80 of 96 chunks) to the hit check and reported 100%.
-  That was hit@~70, not hit@5. Truncated correctly, the no-rerank number is 72.7%.
-- **"Hallucination on impossible questions" needed to be split by faithfulness.** Of the
-  cases where a model answered a question the eval set marked impossible, most were
-  faithful (context-grounded, just disagreeing with an overly strict SQuAD label);
-  only a minority were genuine fabrications. The naive metric overstated hallucination
-  by roughly 3x.
-- **Two earlier conclusions are withdrawn.** Both were drawn from numbers produced by the
-  under-counting matcher: (1) "a reranker given every chunk reached only 31.6%, so the
-  bottleneck is chunk text quality", and (2) "chunk boundaries destroy facts in an estimated
-  ~25% of remaining misses". The corrected check shows every gold snippet fits inside at
-  least one chunk (50-token overlap), so neither claim is supported. They should be
-  re-tested with the corrected matcher before being relied on.
-- **Contextual Retrieval's true effect on hit@5 was never cleanly measured.** By the time
-  it was implemented, the hit-check counting rule had also changed (strict "all snippets
-  must match" vs. lenient "any snippet matches"), confounding the before/after comparison.
-  The clean, apples-to-apples number was never obtained before the project moved on.
+- **A metric bug can look exactly like a real result.** A whitespace mismatch between
+  PDF-extracted text and hand-typed snippets gave a 0% hit rate, then a strict substring
+  match still under-counted (hyphenation, curly quotes). The fix was a normalized comparison
+  (`snippets_hit`: lowercase letters and digits only, both sides). Same retrieval, hit@5 rose
+  from ~27-36% to 81.8% at the time.
+- **An unbounded candidate list is not "hit@5".** With the reranker off, an early eval passed
+  the whole fused list to the hit check and reported 100%. Truncated to 5, it was 72.7%.
+- **"Hallucination on impossible questions" needed splitting by faithfulness.** Most such
+  answers were grounded in the context and only disagreed with an overly strict label; the
+  naive metric overstated hallucination ~3x.
+- **Moving state into Postgres broke the eval harness** (it read JSON files from disk). It now
+  reads through the psycopg pool and uses the same retrieval code as the API.
+- **Relative paths depend on where you launch from.** Run scripts from the repo root; the
+  MLflow store (`mlflow.db`) and the eval-set path are resolved relative to the working directory.
+- Two earlier conclusions (a "31.6% reranker-on-everything" result and "chunk boundaries
+  destroy ~25% of misses") were drawn with the under-counting matcher and are withdrawn.
+- Contextual Retrieval (LLM-written per-chunk blurbs) was implemented earlier, but its effect
+  on recall was never cleanly measured.
 
 ## Limitations
 
-- **Best measured hit@5 is 81.8% (18/22) on a small set.** The 4 misses all had the gold
-  chunk in the RRF top-20 but lost it at the rerank stage, so the reranker (and the
-  multi-chunk question type, where one required chunk is dropped) is the current weak spot.
-  Retrieval hit@5 says the right text was retrieved, not that the LLM answers correctly;
-  the generation eval has not yet been run against this real document.
-- **Chunking is naive.** `chunker.py` slices the document by raw token count with zero
-  sentence/paragraph awareness, and can cut sentences mid-word. Its measured impact is
-  currently unknown: the earlier "~25% of misses" estimate is withdrawn (see Key findings).
-  This PDF's extracted text also has no reliable paragraph markers (`pypdf` emits a single
-  `\n` at both line-wraps and paragraph starts). `pymupdf4llm` is a candidate replacement
-  extractor.
-- **PDF extraction artifacts.** Line-break hyphenation splits words (`moni- toring`), which
-  hurts BM25 tokenization even though an LLM reads it fine. Not yet fixed at the loader.
-- **One eval question is questionable.** Row 21 is labeled `impossible` but carries a gold
-  snippet, so it should probably be excluded from hit@5.
-- **Tiny eval set.** 22 hand-written questions is enough to catch large regressions but too
-  small to reliably measure small effects — each question is ~4.5 percentage points.
-- **Single test document.** All Phase 3 retrieval tuning was measured against one 14-page
-  academic paper, chosen partly because its dense, citation-heavy, jargon-laden prose is a
-  genuinely hard, realistic RAG stress test — but results may not generalize to other
-  document types (manuals, decks, contracts).
-- **LLM-judge noise was never separately quantified.** Faithfulness/correctness scoring
-  relies on an LLM judge; the judge's own consistency (would it give the same verdict twice
-  on the same input?) was flagged as a needed check early on but never measured.
-- **Chunk enrichment (Contextual Retrieval) is not deterministic or persisted.** Blurbs are
-  regenerated by an LLM call every time the ingestion pipeline runs, with no fixed seed and
-  no caching of the enriched chunks to disk — meaning results vary run-to-run and every
-  re-run re-pays the LLM cost.
-- **No CI gate, no API, no frontend, no deployment yet** — Phases 3.5 through 7 of the
-  project plan (`finalplan.txt`) have not been started.
+- **Tiny eval set, single document.** 19 answerable questions on one academic paper; results
+  may not generalize to other document types.
+- **Chunking is naive.** Fixed 200-token windows with 50 overlap, no sentence or paragraph
+  awareness. Its measured impact is unknown.
+- **PDF extraction artifacts** (line-break hyphenation) hurt BM25 tokenization and are not fixed
+  at the loader.
+- **CPU-only embedder and reranker** in the container; uploads are slow.
+- **Latency numbers are single runs** and the exact Gemini model id was not recorded.
+- **BM25 candidate count is fixed** by `hybdrid_embedding_top_k` in `config.py`; the `top_k`
+  switch only changes the vector search and the fused list.
+- **LLM-judge noise was never quantified**, and generation eval has not been re-run against
+  the real document or the Postgres pipeline.
+- No auth on the API, no CI gate, no frontend, not yet deployed.
 
-## Setup
+## Setup and running
 
 ```bash
 pip install -r requirements.txt
+docker compose up --build        # api on http://127.0.0.1:8003, Postgres on 5432
 ```
 
-Requires a `.env` with API credentials for whichever backend(s) you use
-(`ANTHROPIC_API_KEY` for Claude, `LOCAL_SERVER_*` for a hosted OpenAI-compatible server, or a
-local Ollama instance for `ASKLOCAL=True`). See `config.py` for chunking/retrieval parameters.
+Needs a `.env` with `POSTGRES_PASSWORD`, `LLM_BACKEND` (`ollama` | `claude` | `gemini`) and the
+credentials for the backend you pick. See `src/config.py` for chunking and retrieval parameters.
+Use `127.0.0.1`, not `localhost`, on Windows (IPv6 resolution hangs).
 
-## Running
+Run the retrieval experiments from the repo root, with the eval document uploaded under
+`user_id` 99:
 
-- `python main.py` — retrieval eval (hybrid search + rerank) against `eval_set_one.json`.
-- `pipelines.main()` / `pipelines.Checking_claude()` — end-to-end generation eval against
-  `squad_gold.json`, scoring faithfulness/correctness/refusal.
+```bash
+python src/track_eval.py         # logs the a-e grid to MLflow
+mlflow ui --port 5000            # run from the same directory; open http://127.0.0.1:5000
+```
 
 ## Roadmap
 
-See `finalplan.txt` for the full phase-by-phase plan. Immediate next steps: per-query run
-logging (Phase 2.5), a clean re-measurement of Contextual Retrieval against the corrected
-baseline, evaluating `pymupdf4llm` extraction, then Phase 3.5
-(CI-gated eval) and onward to the FastAPI backend and deployment.
+1. Inspect the one missed eval question (retrieval problem or multi-chunk question?).
+2. Cloud deployment: container registry, container app, managed Postgres, secrets.
+3. GPU passthrough for the embedder and reranker.
+4. Stretch: MLflow service in docker-compose, compare LLM backends via the generation eval.
