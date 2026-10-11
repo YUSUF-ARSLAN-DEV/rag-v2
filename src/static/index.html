@@ -55,7 +55,8 @@
   #docs { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; min-height: 0; }
   #docs li { padding: 9px 10px; border-radius: 8px; font-size: 14px; display: flex; gap: 8px; align-items: baseline; }
   #docs li:hover { background: var(--bg); }
-  #docs li::before { content: "\1F4C4"; font-size: 13px; }
+  #docs label { display: flex; gap: 10px; align-items: baseline; cursor: pointer; width: 100%; }
+  #docs input[type=checkbox] { accent-color: var(--accent); flex: none; }
   #docs li span { overflow-wrap: anywhere; }
   .empty { color: var(--muted); font-size: 14px; padding: 9px 10px; }
   #upload-note { font-size: 13px; min-height: 18px; }
@@ -216,12 +217,18 @@
       if (!data.documents.length) {
         const d = document.createElement("div"); d.className = "empty"; d.textContent = "Nothing uploaded yet."; ul.append(d); return;
       }
-      for (const name of data.documents) {
-        const li = document.createElement("li"), s = document.createElement("span");
-        s.textContent = name; li.append(s); ul.append(li);
+      for (const doc of data.documents) {
+        // one checkbox per document; the id is kept in the checkbox value and never shown to the user
+        const li = document.createElement("li"), label = document.createElement("label");
+        const box = document.createElement("input"), s = document.createElement("span");
+        box.type = "checkbox"; box.value = doc.id; box.checked = !unchecked.has(doc.id);
+        box.onchange = () => { if (box.checked) unchecked.delete(doc.id); else unchecked.add(doc.id); };
+        s.textContent = doc.filename; label.append(box, s); li.append(label); ul.append(li);
       }
     } catch {}
   }
+  const unchecked = new Set();   // ids the user switched off; new uploads start switched on
+  const selectedIds = () => [...document.querySelectorAll("#docs input:checked")].map((b) => b.value);
 
   $("upload-btn").onclick = () => $("file").click();
   $("file").onchange = async () => {
@@ -252,12 +259,19 @@
   $("ask").onsubmit = async (e) => {
     e.preventDefault();
     const q = $("question").value.trim(); if (!q) return;
+    const ids = selectedIds();
+    if (document.querySelectorAll("#docs input").length && !ids.length) {
+      addRow("bot").textContent = "Select at least one document on the left to ask about.";
+      return;
+    }
     $("question").value = ""; $("send").disabled = true;
     addRow("user").textContent = q;
     const bubble = addRow("bot");
     const wait = document.createElement("span"); wait.className = "dots"; wait.textContent = "Thinking"; bubble.append(wait);
     try {
-      const res = await api("/ask?" + new URLSearchParams({ question: q }), { method: "POST" });
+      const params = new URLSearchParams({ question: q });
+      for (const id of ids) params.append("documents_id", id);   // repeated once per selected document
+      const res = await api("/ask?" + params, { method: "POST" });
       const data = await res.json();
       bubble.replaceChildren(); bubble.append(document.createTextNode(data.answer || "No answer."));
       if (data.reference) { const r = document.createElement("div"); r.className = "ref"; r.textContent = "Source: " + data.reference; bubble.append(r); }
