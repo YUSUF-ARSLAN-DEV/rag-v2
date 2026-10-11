@@ -11,16 +11,22 @@ conn_string = f"postgresql://postgres:{pw}@{host}:5432/postgres"
 
 def create_pool(conn_string) : 
     return ConnectionPool(conn_string,min_size=2,max_size=5 , configure=register_vector )
-def get_user_chunks(pool , user_id):
+def get_user_chunks(pool , user_id , document_ids=None):
     # borrows a connection only for this query, then returns it to the pool
     with pool.connection() as conn :
-        return conn.execute("SELECT id,chunk_text FROM chunks WHERE user_id=%s ORDER BY id",(user_id,),).fetchall()
+        if document_ids is None :
+            return conn.execute("SELECT id,chunk_text FROM chunks WHERE user_id=%s ORDER BY id",(user_id,),).fetchall()
+        else : 
+            return conn.execute("SELECT id,chunk_text FROM chunks WHERE user_id=%s AND document_id =Any(%s) ORDER BY id",(user_id,document_ids),).fetchall()
 
 
-def search_user_vectors(pool , user_id , question_vector , k ):
+
+def search_user_vectors(pool , user_id , question_vector , k  , document_ids=None):
     with pool.connection() as conn :
-        return conn.execute("SELECT  id , chunk_text FROM chunks WHERE user_id=%s ORDER BY chunk_vector <=> %s LIMIT %s",(user_id,question_vector,k )).fetchall()
-    
+        if document_ids is None :
+            return conn.execute("SELECT  id , chunk_text FROM chunks WHERE user_id=%s ORDER BY chunk_vector <=> %s LIMIT %s",(user_id,question_vector,k )).fetchall()
+        else : 
+            return conn.execute("SELECT  id , chunk_text FROM chunks WHERE user_id=%s AND document_id = ANY(%s) ORDER BY chunk_vector <=> %s LIMIT %s",(user_id,document_ids,question_vector,k )).fetchall()
 
 def init_schema(conn_string) :
     # runs once at app startup, BEFORE the pool is created (the pool registers the vector type on every connection,
@@ -50,8 +56,8 @@ def get_user_by_username(pool , username) :
 def get_user_documents(pool , user_id) :
     # only the file names of THIS user's uploads, oldest first
     with pool.connection() as conn :
-        rows = conn.execute("SELECT filename FROM documents WHERE user_id=%s ORDER BY id",(user_id,)).fetchall()
-    return [row[0] for row in rows]
+        rows = conn.execute("SELECT id ,  filename FROM documents WHERE user_id=%s ORDER BY id",(user_id,)).fetchall() # so that the arragnemnt is alwys the same 
+    return [{"id" :row[0],"filename":row[1]} for row in rows]
 
 
 def hash_text(list_of_strings):

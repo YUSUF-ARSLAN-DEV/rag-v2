@@ -1,4 +1,4 @@
-from fastapi import FastAPI , UploadFile , File , Form , Depends , HTTPException
+from fastapi import FastAPI , UploadFile , File , Form , Depends , HTTPException, Query 
 from fastapi.responses import FileResponse
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -58,9 +58,12 @@ def list_documents(user_id:int = Depends(get_current_user)) :
 
 
 @app.post("/ask")
-def ask_question(question:str , user_id:int = Depends(get_current_user)) :
+def ask_question(question:str ,documents_id:list[int]=Query(default=[]) ,user_id:int = Depends(get_current_user), ) :
     with app.state.pool.connection() as conn :
-        check = conn.execute("SELECT 1 FROM chunks WHERE user_id=%s LIMIT 1",(user_id,)).fetchone()
-    if check == None :
-        return {"answered": False, "answer": "The user has no files uploaded.", "reference": None, "top_chunks": []}
-    return answer_question(question.strip(), user_id, app.state.pool)
+        if not documents_id : 
+            check = conn.execute("SELECT 1 FROM chunks WHERE user_id=%s  LIMIT 1",(user_id,)).fetchone()
+        else:
+            check = conn.execute("SELECT 1 FROM chunks WHERE user_id=%s AND document_id = Any(%s) LIMIT 1",(user_id,documents_id)).fetchone()
+        if check == None :
+            return {"answered": False, "answer": "The user has no files uploaded.", "reference": None, "top_chunks": []}
+    return answer_question(question.strip(), user_id, app.state.pool ,documents_id  = documents_id)

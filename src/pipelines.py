@@ -222,15 +222,16 @@ def build_index(file_paths):
 
 
 def ask_question_phase1(question, user_id , pool , timings , eval_mode=False ,
-                        use_bm25=True , use_rerank=True , top_k=hybdrid_embedding_top_k):
+                        use_bm25=True , use_rerank=True , top_k=hybdrid_embedding_top_k ,document_ids=None):
     # use_bm25 / use_rerank / top_k are experiment switches; the defaults = the behavior the API always had
     with timed(timings , "embed_question") :
         embedded_question = np.array([embed_question(question)]).astype("float32")[0] # extracting the list
-
+    if not  document_ids :
+        document_ids = None
     bm25_top_rows = []
     if use_bm25 :
         with timed(timings , "db_read_chunks") :
-            all_chunks_for_user = get_user_chunks(pool,user_id )
+            all_chunks_for_user = get_user_chunks(pool,user_id,document_ids)
 
         with timed(timings , "bm25") :
             bm25 = build_bm25_index(all_chunks_for_user )
@@ -238,7 +239,7 @@ def ask_question_phase1(question, user_id , pool , timings , eval_mode=False ,
             bm25_top_rows = [all_chunks_for_user[i] for i in bm25_indices ]
 
     with timed(timings , "vector_search") :
-        FAISS_TOP = search_user_vectors(pool , user_id , embedded_question,top_k)
+        FAISS_TOP = search_user_vectors(pool , user_id , embedded_question,top_k,document_ids)
 
     with timed(timings , "rrf_fusion") :
         hybrid_chunks = RFF_TOP_PICKS(FAISS_TOP, bm25_top_rows , top_k)  # no BM25 rows -> just the vector order
@@ -270,10 +271,10 @@ def ask_question_phase2(q_stack,timings,top_chunks) :
     return {"answered": False, "answer": "The model could not answer from the provided documents.", "reference": None, "top_chunks": top_chunks}
 
     
-def answer_question( question, user_id , pool ):
+def answer_question( question, user_id , pool ,documents_id=None):
     timings = {}  # seconds spent in each stage, written to the container log
 
-    q_stack,top_chunks = ask_question_phase1(question , user_id , pool,timings  ) 
+    q_stack,top_chunks = ask_question_phase1(question , user_id , pool,timings ,document_ids =documents_id ) 
     return  ask_question_phase2(q_stack , timings,top_chunks ) # returns the JSON 
     
 
