@@ -4,7 +4,8 @@ from dotenv import load_dotenv
 import os
 import hashlib
 import psycopg
-load_dotenv() 
+from psycopg.types.json import Jsonb
+load_dotenv()
 host = os.getenv("POSTGRES_HOST","localhost")
 pw = os.getenv("POSTGRES_PASSWORD")
 conn_string = f"postgresql://postgres:{pw}@{host}:5432/postgres"
@@ -38,8 +39,10 @@ def init_schema(conn_string) :
         # one row per uploaded file; the same content can't be uploaded twice by the same user
         conn.execute("CREATE TABLE IF NOT EXISTS documents (id SERIAL PRIMARY KEY , user_id INTEGER NOT NULL , filename TEXT , content_hash TEXT NOT NULL , UNIQUE (user_id , content_hash))")
         conn.execute("CREATE TABLE IF NOT EXISTS chunks (id SERIAL PRIMARY KEY , user_id INTEGER NOT NULL , document_id INTEGER REFERENCES documents(id) , chunk_text TEXT , chunk_vector vector(1024))")
-
-
+        # creating the converstaions tables 
+        conn.execute("CREATE TABLE IF NOT EXISTS conversations (id SERIAL PRIMARY KEY , user_id INTEGER NOT NULL REFERENCES users(user_id) , title TEXT , created_at TIMESTAMPTZ DEFAULT now() , updated_at TIMESTAMPTZ DEFAULT now())")
+        conn.execute("CREATE TABLE IF NOT EXISTS messages (id SERIAL PRIMARY KEY , conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE , role TEXT NOT NULL , content TEXT NOT NULL , reference TEXT , top_chunks JSONB , document_ids INTEGER[] , created_at TIMESTAMPTZ DEFAULT now())")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages (conversation_id , id)")
 def create_user(pool , username , password_hash) :
     # the UNIQUE constraint makes the "does this username exist" check and the insert ONE atomic step
     # (check-then-insert in two steps would let two simultaneous registrations both pass the check)
@@ -65,3 +68,73 @@ def hash_text(list_of_strings):
     encoded = joined_strings.encode("utf-8")
     hashed_content =  hashlib.sha256(encoded).hexdigest() 
     return hashed_content
+
+
+def create_conversation( pool  , user_id , title="New Chat") :
+    with pool.connection() as conn :
+        row = conn.execute("INSERT INTO conversations (user_id , title) VALUES (%s , %s) RETURNING id",(user_id , title )).fetchone()
+        return row[0] # retusn the ID of the newly created conversatoion record
+
+
+def list_conversations(pool , user_id) :
+    # this user's conversations, most recently active first (the sidebar can render them in this order)
+    with pool.connection() as conn :
+        rows = conn.execute(
+            "SELECT id , title , created_at , updated_at FROM conversations WHERE user_id=%s ORDER BY updated_at DESC",
+            (user_id,)).fetchall()
+    return [{"id": row[0] , "title": row[1] , "created_at": row[2] , "updated_at": row[3]} for row in rows]
+
+
+def get_conversation_messages(pool , user_id , conversation_id) :
+    with pool.connection() as conn :
+        # authorization: messages has no user_id, so ownership is checked through the conversations table
+        owner = conn.execute("SELECT 1 FROM conversations WHERE id=%s AND user_id=%s",
+                             (conversation_id , user_id)).fetchone()
+        if owner is None :
+            return None   # not found, or belongs to someone else
+        rows = conn.execute(
+            "SELECT id , role , content , reference , top_chunks , document_ids , created_at "
+            "FROM messages WHERE conversation_id=%s ORDER BY id",
+            (conversation_id,)).fetchall()
+    return [{"id": r[0] , "role": r[1] , "content": r[2] , "reference": r[3] ,
+             "top_chunks": r[4] , "document_ids": r[5] , "created_at": r[6]} for r in rows]
+
+
+def get_recent_turns(pool , user_id , conversation_id , n_turns=3) :
+    # the last n_turns question/answer pairs, oldest first, as {"role","content"} dicts for the LLM prompt
+    with pool.connection() as conn :
+        owner = conn.execute("SELECT 1 FROM conversations WHERE id=%s AND user_id=%s",
+                             (conversation_id , user_id)).fetchone()
+        if owner is None :
+            return None
+        rows = conn.execute(
+            "SELECT role , content FROM messages WHERE conversation_id=%s ORDER BY id DESC LIMIT %s",
+            (conversation_id , n_turns * 2)).fetchall()   # a turn = question + answer = 2 messages
+    rows.reverse()   # newest-first from SQL -> oldest-first for the prompt
+    return [{"role": r[0] , "content": r[1]} for r in rows]
+
+
+def add_message(pool , user_id , conversation_id , role , content ,
+                reference=None , top_chunks=None , document_ids=None) :
+    with pool.connection() as conn :
+        # one query = ownership check + bump updated_at (RETURNING gives a row only if this user owns the conversation)
+        owner = conn.execute(
+            "UPDATE conversations SET updated_at=now() WHERE id=%s AND user_id=%s RETURNING id",
+            (conversation_id , user_id)).fetchone()
+        if owner is None :
+            return None   # not found, or belongs to someone else
+        row = conn.execute(
+            "INSERT INTO messages (conversation_id , role , content , reference , top_chunks , document_ids) "
+            "VALUES (%s , %s , %s , %s , %s , %s) RETURNING id",
+            (conversation_id , role , content , reference ,
+             Jsonb(top_chunks) if top_chunks is not None else None , document_ids)).fetchone()
+    return row[0]   # id of the new message
+
+
+def delete_conversation(pool , user_id , conversation_id) :
+    # ON DELETE CASCADE on messages.conversation_id removes this conversation's messages automatically
+    with pool.connection() as conn :
+        row = conn.execute(
+            "DELETE FROM conversations WHERE id=%s AND user_id=%s RETURNING id",
+            (conversation_id , user_id)).fetchone()
+    return row is not None   # True = deleted, False = not found / not yours
