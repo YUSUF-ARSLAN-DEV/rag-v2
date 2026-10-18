@@ -42,7 +42,6 @@ def askQuestionToAI(q_stack, local=False):
         print("Asking your local OLLAMA MODEL RUNNING ON YOUR WEAK ASS GPU ")
     refrence_text = q_stack[0]
     question = q_stack[1]
-    sources = q_stack[-1]
     client = get_client(local)
     model_name = "qwen3.5:9b" if local else os.getenv("LOCAL_SERVER_MODEL_NAME")
     response = client.chat.completions.create(

@@ -19,21 +19,6 @@ import tempfile
 # Interactive RAG pipeline (ask a question about a real document you loaded)
 # ---------------------------------------------------------------------------
 
-def askQuestionToIndex(index, chunks):
-    # asking the question then embedding the question
-    question = input("Please write a question regarding the file that you just passed\n"
-                      "make sure that what you are asking about exists in the file\n").strip()
-    q_final = np.array([embed_question(question)]).astype("float32")
-
-    _, indices = index.search(q_final, 3)  # retrieve the closest 3 chunks
-
-    # chunks maintain the same order as when they were populated into the index,
-    # so the returned index lines up with the chunk's position in the list
-    text_passed_to_AI = "\n\n".join(chunks[k]["text"] for k in indices[0])
-    sources = [chunks[k]["source"] for k in indices[0]]
-    return [text_passed_to_AI, question, sources]  # [context, question, sources]
-
-
 def manual_initialization_pipeline(file_paths, activate_hybrid=False,activate_chunk_enhancement=False ):  # chunk and embed from scratch every time
     text_string = load_document(file_paths)
     chunks = chunk(text_string, chunk_size, overlap_size, file_paths)
@@ -100,7 +85,7 @@ def run_generation_eval(ask_fn, judge_fn, label, limit=None):
         retrieval_hit = indices[0][0] == zindex or contexts[indices[0][0]] == contexts[zindex]
         context_piece = contexts[indices[0][0]]
         question_text = question_list[zindex]
-        q_stack = [context_piece, question_text, None]
+        q_stack = [context_piece, question_text]
 
         response, client, model_name, refrence_text, question_text = ask_fn(q_stack)
         print(f"[{label}] answered question {question_count}")
@@ -255,7 +240,7 @@ def ask_question_phase1(question, user_id , pool , timings , eval_mode=False ,
         return top_chunks  # the eval only needs the retrieved chunks, not the LLM prompt
 
     evidence_text = "\n\n".join(top_chunks)
-    q_stack = [evidence_text, question, None]
+    q_stack = [evidence_text, question]
     return q_stack ,top_chunks
 
 def ask_question_phase2(q_stack,timings,top_chunks) :
