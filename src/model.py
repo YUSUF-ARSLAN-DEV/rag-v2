@@ -15,6 +15,19 @@ ANSWERER_SYSTEM_PROMPT = "You answer strictly and only from the CONTEXT provided
 
 JUDGE_SYSTEM_PROMPT = "You are an AI evlauation engineer , of the highest skilll and rank , working on evaluating the reponse of  a model , the model is given a piece of context and a question then it is asked to answer the question using the context , your job is to inspect the question , the context , and make judgement on wether the model answered correctly using the context you will have the schema that you must fill provided to you "
 
+# Used by rewrite_question(): turns a follow-up into a standalone search query (or leaves it alone).
+REWRITER_SYSTEM_PROMPT = (
+    "You rewrite follow-up questions for a document search system. You are given the conversation so far between a user "
+    "and an assistant, then the user's latest question. Your output is used as a search query over the user's documents, "
+    "so it must make sense completely on its own. "
+    "If the latest question depends on the conversation (for example it uses pronouns like 'it' or 'they', or says "
+    "'what about the second one'), rewrite it as a standalone question by replacing every reference with the actual term "
+    "from the conversation, and set re_written to true. "
+    "If the latest question is already self-contained, return it exactly as written and set re_written to false. "
+    "Rules: do NOT answer the question. Use the conversation only to resolve references. Do not add facts, names or "
+    "details that the conversation does not contain, and do not change what the question is asking."
+)
+
 CLAUDE_MODEL_NAME = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")  # override with a cheaper model for the deployed demo
 
 
@@ -144,7 +157,17 @@ def define_LLM_EVALUATION_SCHEMA(schema=0):
             } , 
             "required" : ["context_blurb"]
         }
-        return schemaa 
+        return schemaa
+    elif schema == 3 :
+        rewrite_schema = {
+            "type":"object" ,
+            "properties" : {
+                "re_written" : {"type":"boolean" , "description":"True if the follow-up question depended on the conversation and you rewrote it. False if it was already self-contained and you returned it unchanged."},
+                "new_question" : {"type":"string" , "description":"The standalone question. If re_written is false, this is the original question exactly as written."}
+            } ,
+            "required" : ["re_written" , "new_question"]
+        }
+        return rewrite_schema 
 
 
 def build_judge_user_prompt(refrence_text, question, answered, answer, expected_answer):
@@ -254,6 +277,43 @@ def askQuestionToLLM(q_stack):
     raise ValueError(f"Unknown LLM_BACKEND '{backend}'. Use ollama, claude or gemini.")
 
 
+def rewrite_question(history, question):
+    # history = [{"role","content"}, ...] oldest first (from get_recent_turns). Returns the question to SEARCH with.
+    if not history :
+        return question  # first message of a chat: nothing to resolve, so skip the extra LLM call
+    transcript = "\n".join(f"{m['role'].capitalize()}: {m['content']}" for m in history)
+    user_prompt = f"CONVERSATION SO FAR:\n{transcript}\n\nLATEST QUESTION:\n{question}"
+    schema = define_LLM_EVALUATION_SCHEMA(3)
+    backend = os.getenv("LLM_BACKEND", "ollama").strip().lower() # seting it to gemini if not then locally 
+    try :
+        if backend == "claude" :
+            result = _claude_structured_call(get_claude_client(), REWRITER_SYSTEM_PROMPT, user_prompt, schema, "submit_rewrite")
+        else :
+            if backend == "gemini" :
+                client = OpenAI(base_url=GEMINI_BASE_URL, api_key=os.getenv("GEMINI_API_KEY"))
+                model_name = _gemini_model_list()[0]
+            else :   # ollama, same local setup as askQuestionToLLM
+                client = get_client(local=True)
+                model_name = "qwen3.5:9b"
+            response = client.chat.completions.create(
+                model=model_name,
+                temperature=0,
+                messages=[
+                    {"role": "system", "content": REWRITER_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                response_format={"type": "json_schema", "json_schema": {"name": "rewrite", "schema": schema}},
+            )
+            result = json.loads(response.choices[0].message.content)
+        if not result["re_written"] :
+            return question   # the model says it was already standalone: trust the flag, keep the exact original text
+        new_question = result["new_question"].strip()
+        return new_question or question   # an empty rewrite is useless: keep the original
+    except Exception as e :
+        print(f"rewrite_question failed ({type(e).__name__}), searching with the original question")
+        return question   # a failed rewrite must never break /ask
+
+
 def ask_CLAUDE_TO_EVALUATE_RESPONSE(response , client , model_name , refrence_text , question , expected_answer ):
     response_dict = json.loads(response)
     if expected_answer == None :
@@ -271,7 +331,7 @@ def ask_CLAUDE_TO_EVALUATE_RESPONSE(response , client , model_name , refrence_te
     return result["is_faithful"] , result["is_correct"] , result["reasoning"] , answered
 
 
- # since it returns a list of string not simply one string 
+ # since it returns a list lof string not simply one string 
 
 def enhancing_chunks(chunk,doc_text,file_path=enhancement_source_file_path ,claude_mode = False ):
     enhancment_schema = define_LLM_EVALUATION_SCHEMA(2)

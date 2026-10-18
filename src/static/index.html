@@ -59,6 +59,15 @@
   #docs input[type=checkbox] { accent-color: var(--accent); flex: none; }
   #docs li span { overflow-wrap: anywhere; }
   .empty { color: var(--muted); font-size: 14px; padding: 9px 10px; }
+  #convs { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; min-height: 0; }
+  #convs li { display: flex; align-items: center; gap: 4px; border-radius: 8px; }
+  #convs li:hover, #convs li.active { background: var(--bg); }
+  #convs li.active .conv-title { font-weight: 600; }
+  .conv-title { flex: 1; min-width: 0; text-align: left; border: 0; background: transparent; padding: 9px 10px;
+                cursor: pointer; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .conv-del { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 6px 9px;
+              border-radius: 6px; font-size: 16px; line-height: 1; }
+  .conv-del:hover { color: var(--danger); }
   #upload-note { font-size: 13px; min-height: 18px; }
 
   main { display: flex; flex-direction: column; min-height: 0; }
@@ -114,6 +123,11 @@
 <section id="app" class="hidden">
   <aside>
     <div class="who"><span id="who"></span><button class="btn ghost" id="logout" type="button">Sign out</button></div>
+    <button class="btn block" id="new-chat" type="button" style="margin-top:0">+ New chat</button>
+    <div>
+      <h2>Your chats</h2>
+    </div>
+    <ul id="convs"></ul>
     <div>
       <h2>Your documents</h2>
     </div>
@@ -141,13 +155,13 @@
 
 <script>
   // The token lives in sessionStorage: it survives a page refresh but is wiped when the tab closes.
-  const TOKEN_KEY = "rag_token", NAME_KEY = "rag_username";
+  const TOKEN_KEY = "rag_token", NAME_KEY = "rag_username", CONV_KEY = "rag_conversation";
   const $ = (id) => document.getElementById(id);
   let mode = "login";
 
   const getToken = () => { try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; } };
   const setSession = (token, name) => { try { sessionStorage.setItem(TOKEN_KEY, token); sessionStorage.setItem(NAME_KEY, name); } catch {} };
-  const clearSession = () => { try { sessionStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(NAME_KEY); } catch {} };
+  const clearSession = () => { try { sessionStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(NAME_KEY); sessionStorage.removeItem(CONV_KEY); } catch {} };
 
   // every call to a protected route goes through here, so the token is attached in ONE place
   async function api(path, options = {}) {
@@ -162,9 +176,14 @@
     let name = ""; try { name = sessionStorage.getItem(NAME_KEY) || ""; } catch {}
     $("who").textContent = name;
     loadDocs();
+    loadConversations();
+    // after a refresh, reopen the chat that was open before
+    let saved = null; try { saved = sessionStorage.getItem(CONV_KEY); } catch {}
+    if (saved) openConversation(Number(saved));
   }
   function signOut(message) {
     clearSession();
+    currentConversationId = null; resetChat(); $("convs").replaceChildren();   // don't leave the previous user's chat on screen
     $("app").classList.add("hidden"); $("auth").classList.remove("hidden");
     $("password").value = "";
     setMsg($("auth-msg"), message || "", "err");
@@ -256,6 +275,81 @@
     return bubble;
   }
 
+  // fills a bot bubble: the answer text, the source quote, and the collapsible passages (same for live and reloaded answers)
+  function fillBot(bubble, text, reference, chunks) {
+    bubble.replaceChildren(); bubble.append(document.createTextNode(text || "No answer."));
+    if (reference) { const r = document.createElement("div"); r.className = "ref"; r.textContent = "Source: " + reference; bubble.append(r); }
+    if (chunks && chunks.length) {
+      const det = document.createElement("details"), sum = document.createElement("summary");
+      sum.textContent = "Show the " + chunks.length + " passages used"; det.append(sum);
+      for (const c of chunks) { const d = document.createElement("div"); d.className = "chunk"; d.textContent = c; det.append(d); }
+      bubble.append(det);
+    }
+  }
+
+  /* ---------- conversations ---------- */
+  let currentConversationId = null;   // null = the next question starts a new chat
+  function setCurrentConv(id) {
+    currentConversationId = id;
+    try { if (id === null) sessionStorage.removeItem(CONV_KEY); else sessionStorage.setItem(CONV_KEY, id); } catch {}
+    highlightActive();
+  }
+  function highlightActive() {
+    for (const li of document.querySelectorAll("#convs li")) li.classList.toggle("active", Number(li.dataset.id) === currentConversationId);
+  }
+  function resetChat() {
+    const hint = document.createElement("div"); hint.className = "hint"; hint.id = "hint";
+    const h = document.createElement("h3"); h.textContent = "Ask your documents anything";
+    const d = document.createElement("div"); d.textContent = "Upload a document on the left, then type a question below.";
+    hint.append(h, d); $("chat").replaceChildren(hint);
+  }
+  function newChat() { setCurrentConv(null); resetChat(); $("question").focus(); }
+  $("new-chat").onclick = newChat;
+
+  async function loadConversations() {
+    const ul = $("convs"); ul.replaceChildren();
+    try {
+      const data = await (await api("/conversations")).json();
+      if (!data.conversations.length) {
+        const d = document.createElement("div"); d.className = "empty"; d.textContent = "No chats yet."; ul.append(d); return;
+      }
+      for (const c of data.conversations) {
+        const li = document.createElement("li"); li.dataset.id = c.id;
+        const t = document.createElement("button"); t.type = "button"; t.className = "conv-title";
+        t.textContent = c.title || "New chat"; t.onclick = () => openConversation(c.id);
+        const x = document.createElement("button"); x.type = "button"; x.className = "conv-del";
+        x.textContent = "×"; x.title = "Delete this chat"; x.setAttribute("aria-label", "Delete this chat");
+        x.onclick = () => deleteConversation(c.id);
+        li.append(t, x); ul.append(li);
+      }
+      highlightActive();
+    } catch {}
+  }
+
+  // clicking a chat loads ONLY that chat's messages, then redraws them
+  async function openConversation(id) {
+    try {
+      const res = await api("/conversations/" + id);
+      if (!res.ok) { newChat(); loadConversations(); return; }   // stale id, e.g. the chat was deleted
+      const data = await res.json();
+      resetChat(); setCurrentConv(id);
+      for (const m of data.messages) {
+        if (m.role === "user") addRow("user").textContent = m.content;
+        else fillBot(addRow("bot"), m.content, m.reference, m.top_chunks);
+      }
+      $("chat").scrollTop = $("chat").scrollHeight;
+    } catch {}
+  }
+
+  async function deleteConversation(id) {
+    if (!confirm("Delete this chat? This cannot be undone.")) return;
+    try {
+      await api("/conversations/" + id, { method: "DELETE" });
+      if (id === currentConversationId) newChat();
+      loadConversations();
+    } catch {}
+  }
+
   $("ask").onsubmit = async (e) => {
     e.preventDefault();
     const q = $("question").value.trim(); if (!q) return;
@@ -269,17 +363,17 @@
     const bubble = addRow("bot");
     const wait = document.createElement("span"); wait.className = "dots"; wait.textContent = "Thinking"; bubble.append(wait);
     try {
+      const askedIn = currentConversationId;   // remember which chat this question belongs to
       const params = new URLSearchParams({ question: q });
       for (const id of ids) params.append("documents_id", id);   // repeated once per selected document
+      if (askedIn !== null) params.append("conversation_id", askedIn);   // continue this chat; no id = start a new one
       const res = await api("/ask?" + params, { method: "POST" });
       const data = await res.json();
-      bubble.replaceChildren(); bubble.append(document.createTextNode(data.answer || "No answer."));
-      if (data.reference) { const r = document.createElement("div"); r.className = "ref"; r.textContent = "Source: " + data.reference; bubble.append(r); }
-      if (data.top_chunks && data.top_chunks.length) {
-        const det = document.createElement("details"), sum = document.createElement("summary");
-        sum.textContent = "Show the " + data.top_chunks.length + " passages used"; det.append(sum);
-        for (const c of data.top_chunks) { const d = document.createElement("div"); d.className = "chunk"; d.textContent = c; det.append(d); }
-        bubble.append(det);
+      if (!res.ok) { bubble.textContent = data.detail || "Something went wrong. Please try again."; return; }
+      fillBot(bubble, data.answer, data.reference, data.top_chunks);
+      // the server created a new chat for this first question: remember its id and show it in the sidebar
+      if (data.conversation_id && askedIn === currentConversationId && data.conversation_id !== currentConversationId) {
+        setCurrentConv(data.conversation_id); loadConversations();
       }
     } catch (err) { if (err.message !== "unauthorized") bubble.textContent = "Something went wrong. Please try again."; }
     finally { $("send").disabled = false; $("question").focus(); $("chat").scrollTop = $("chat").scrollHeight; }

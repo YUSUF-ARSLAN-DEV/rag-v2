@@ -3,7 +3,7 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 from contextlib import asynccontextmanager
 from pipelines import processing_file_uploads, answer_question
-from db import conn_string , create_pool , init_schema , get_user_documents , create_user , get_user_by_username , list_conversations , get_conversation_messages , delete_conversation
+from db import conn_string , create_pool , init_schema , get_user_documents , create_user , get_user_by_username , list_conversations , get_conversation_messages , delete_conversation , get_recent_turns , create_conversation , add_message
 from auth import hash_password , verify_password , create_token , get_current_user
 
 
@@ -79,7 +79,12 @@ def remove_conversation(conversation_id:int , user_id:int = Depends(get_current_
 
 
 @app.post("/ask")
-def ask_question(question:str ,documents_id:list[int]=Query(default=[]) ,user_id:int = Depends(get_current_user), ) :
+def ask_question(question:str ,documents_id:list[int]=Query(default=[]) ,conversation_id:int|None=None ,user_id:int = Depends(get_current_user), ) :
+    history = None   # no conversation_id = a brand new chat, so there is nothing to remember yet
+    if conversation_id is not None :
+        history = get_recent_turns(app.state.pool , user_id , conversation_id)   # loaded BEFORE this question is saved
+        if history is None :   # doesn't exist OR belongs to someone else
+            raise HTTPException(status_code=404 , detail="Conversation not found")
     with app.state.pool.connection() as conn :
         if not documents_id :  # below is a check to make sure that the user has chunks or not 
             check = conn.execute("SELECT 1 FROM chunks WHERE user_id=%s  LIMIT 1",(user_id,)).fetchone()
@@ -87,4 +92,13 @@ def ask_question(question:str ,documents_id:list[int]=Query(default=[]) ,user_id
             check = conn.execute("SELECT 1 FROM chunks WHERE user_id=%s AND document_id = Any(%s) LIMIT 1",(user_id,documents_id)).fetchone()
         if check == None :
             return {"answered": False, "answer": "The user has no files uploaded.", "reference": None, "top_chunks": []}
-    return answer_question(question.strip(), user_id, app.state.pool ,documents_id  = documents_id)
+    # outside the `with`: the connection goes back to the pool BEFORE the slow retrieval + LLM call
+    Answer = answer_question(question.strip(), user_id, app.state.pool ,documents_id  = documents_id , history = history)
+    if conversation_id is None :  
+        conversation_id = create_conversation(app.state.pool  , user_id , question.strip()[:50] )
+    add_message(app.state.pool , user_id , conversation_id , "user" , question.strip() , document_ids = documents_id or None) # saving the user's messages ([] = "all documents" is stored as NULL)
+    answered = Answer["answered"]
+    add_message(app.state.pool , user_id , conversation_id , "assistant" , Answer["answer"] ,
+                reference = Answer["reference"] if answered else None ,
+                top_chunks = Answer["top_chunks"] if answered else None)   # sources only stored for real answers
+    return {**Answer , "conversation_id": conversation_id}   # the UI needs the id to continue this chat

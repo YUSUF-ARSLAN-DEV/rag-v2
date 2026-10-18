@@ -119,7 +119,7 @@ def add_message(pool , user_id , conversation_id , role , content ,
     with pool.connection() as conn :
         # one query = ownership check + bump updated_at (RETURNING gives a row only if this user owns the conversation)
         owner = conn.execute(
-            "UPDATE conversations SET updated_at=now() WHERE id=%s AND user_id=%s RETURNING id",
+            "UPDATE conversations SET updated_at=now() WHERE id=%s AND user_id=%s RETURNING id", # updating  the time that the converstaiont was edited
             (conversation_id , user_id)).fetchone()
         if owner is None :
             return None   # not found, or belongs to someone else

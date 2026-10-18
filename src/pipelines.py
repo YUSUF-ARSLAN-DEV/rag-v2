@@ -7,12 +7,12 @@ import numpy as np
 
 from chunker import chunk
 from timing import timed , log_timings
-from db import hash_text , get_user_chunks  , search_user_vectors , create_pool ,conn_string
+from db import hash_text , get_user_chunks  , search_user_vectors , create_pool ,conn_string , add_message 
 from embedder import fais_chunks_embedder, populate_index, embed_question, build_bm25_index, bm25_search , RFF_TOP_PICKS  , reranker
 from document_loader import load_document
 from config import chunk_size, overlap_size, file_paths , activate_hybrid_embedding , hybdrid_embedding_top_k , activate_rerank
 from evaluate import reading_the_golden_set
-from model  import askQuestionToAI ,ask_AI_TO_EVALUTE_RESPONSE , ask_CLAUDE_TO_EVALUATE_RESPONSE ,askQuestionToClaude , askQuestionToLLM
+from model  import askQuestionToAI ,ask_AI_TO_EVALUTE_RESPONSE , ask_CLAUDE_TO_EVALUATE_RESPONSE ,askQuestionToClaude , askQuestionToLLM , rewrite_question
 import tempfile 
 
 # ---------------------------------------------------------------------------
@@ -256,11 +256,16 @@ def ask_question_phase2(q_stack,timings,top_chunks) :
     return {"answered": False, "answer": "The model could not answer from the provided documents.", "reference": None, "top_chunks": top_chunks}
 
     
-def answer_question( question, user_id , pool ,documents_id=None):
+def answer_question( question, user_id , pool ,documents_id=None, history = None):
     timings = {}  # seconds spent in each stage, written to the container log
+    with timed(timings , "rewrite"):
+        search_question = rewrite_question(history , question)
 
-    q_stack,top_chunks = ask_question_phase1(question , user_id , pool,timings ,document_ids =documents_id ) 
-    return  ask_question_phase2(q_stack , timings,top_chunks ) # returns the JSON 
+    q_stack,top_chunks = ask_question_phase1(search_question , user_id , pool,timings ,document_ids =documents_id ) 
+  
+    
+    return ask_question_phase2(q_stack , timings,top_chunks ) # returns the JSON 
+    
     
 
 def evaluate_recall_at_5(user_id=999 , **retrieval_switches):  # switches: use_bm25, use_rerank, top_k
