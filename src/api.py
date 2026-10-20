@@ -93,7 +93,11 @@ def ask_question(question:str ,documents_id:list[int]=Query(default=[]) ,convers
         if check == None :
             return {"answered": False, "answer": "The user has no files uploaded.", "reference": None, "top_chunks": []}
     # outside the `with`: the connection goes back to the pool BEFORE the slow retrieval + LLM call
-    Answer = answer_question(question.strip(), user_id, app.state.pool ,documents_id  = documents_id , history = history)
+    try :
+        Answer = answer_question(question.strip(), user_id, app.state.pool ,documents_id  = documents_id , history = history)
+    except Exception as e :   # rewrite or answer LLM failed: nothing is saved, the UI shows this message
+        print(f"/ask failed ({type(e).__name__}: {e})")
+        raise HTTPException(status_code=503 , detail="The assistant is temporarily unavailable. Please try again.")
     if conversation_id is None :  
         conversation_id = create_conversation(app.state.pool  , user_id , question.strip()[:50] )
     add_message(app.state.pool , user_id , conversation_id , "user" , question.strip() , document_ids = documents_id or None) # saving the user's messages ([] = "all documents" is stored as NULL)

@@ -27,3 +27,7 @@ graphify-out/.graphify_labels.json
 graphify-out/.graphify_labels.json
 graphify-out/manifest.json
 test
+users_test/
+src/prepare_benchmark.py
+credentials_test.txt
+TECHNICAL_SUMMARY.txt

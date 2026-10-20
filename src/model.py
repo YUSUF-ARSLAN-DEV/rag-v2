@@ -277,6 +277,31 @@ def askQuestionToLLM(q_stack):
     raise ValueError(f"Unknown LLM_BACKEND '{backend}'. Use ollama, claude or gemini.")
 
 
+def _gemini_rewrite_call(user_prompt, schema, retries_per_model=3):
+    # same idea as askQuestionToGemini: retry each model with a growing pause, then move on to the next model
+    client = OpenAI(base_url=GEMINI_BASE_URL, api_key=os.getenv("GEMINI_API_KEY"))
+    last_error = None
+    for model_name in _gemini_model_list():
+        for attempt in range(retries_per_model):
+            print(f"Rewriting the question with GEMINI ({model_name}), attempt {attempt + 1}/{retries_per_model}")
+            try:
+                return client.chat.completions.create(
+                    model=model_name,
+                    temperature=0,
+                    messages=[
+                        {"role": "system", "content": REWRITER_SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    response_format={"type": "json_schema", "json_schema": {"name": "rewrite", "schema": schema}},
+                )
+            except (InternalServerError, RateLimitError, APIConnectionError) as e:
+                last_error = e
+                print(f"Gemini rewrite ({model_name}) temporary failure: {type(e).__name__}")
+                if attempt < retries_per_model - 1:
+                    time.sleep(2 ** attempt)
+    raise last_error  # every model and every retry failed
+
+
 def rewrite_question(history, question):
     # history = [{"role","content"}, ...] oldest first (from get_recent_turns). Returns the question to SEARCH with.
     if not history :
@@ -290,28 +315,25 @@ def rewrite_question(history, question):
             result = _claude_structured_call(get_claude_client(), REWRITER_SYSTEM_PROMPT, user_prompt, schema, "submit_rewrite")
         else :
             if backend == "gemini" :
-                client = OpenAI(base_url=GEMINI_BASE_URL, api_key=os.getenv("GEMINI_API_KEY"))
-                model_name = _gemini_model_list()[0]
+                response = _gemini_rewrite_call(user_prompt, schema)   # same retry + model fallback as the answer step
             else :   # ollama, same local setup as askQuestionToLLM
-                client = get_client(local=True)
-                model_name = "qwen3.5:9b"
-            response = client.chat.completions.create(
-                model=model_name,
-                temperature=0,
-                messages=[
-                    {"role": "system", "content": REWRITER_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt},
-                ],
-                response_format={"type": "json_schema", "json_schema": {"name": "rewrite", "schema": schema}},
-            )
+                response = get_client(local=True).chat.completions.create(
+                    model="qwen3.5:9b",
+                    temperature=0,
+                    messages=[
+                        {"role": "system", "content": REWRITER_SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    response_format={"type": "json_schema", "json_schema": {"name": "rewrite", "schema": schema}},
+                )
             result = json.loads(response.choices[0].message.content)
         if not result["re_written"] :
             return question   # the model says it was already standalone: trust the flag, keep the exact original text
         new_question = result["new_question"].strip()
         return new_question or question   # an empty rewrite is useless: keep the original
     except Exception as e :
-        print(f"rewrite_question failed ({type(e).__name__}), searching with the original question")
-        return question   # a failed rewrite must never break /ask
+        print(f"rewrite_question failed ({type(e).__name__}: {e})")
+        raise   # no silent fallback: a follow-up searched as-is gives a poor answer, so /ask turns this into a clean error
 
 
 def ask_CLAUDE_TO_EVALUATE_RESPONSE(response , client , model_name , refrence_text , question , expected_answer ):
