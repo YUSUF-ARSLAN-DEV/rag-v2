@@ -129,8 +129,8 @@ Each config is one run (`src/track_eval.py`).
 - Re-running the whole grid gave identical numbers, so retrieval is deterministic.
 - **Regression check after adding conversations and memory:** re-run on 2026-10-23, config c
   still 94.7% (18/19), so the `/ask` changes did not touch retrieval quality.
-- Caveats: 19 questions (1 question ~ 5 points), one document, one run per config. Claim
-  "about 90-95% recall@5 on a 19-question hand-written set", not a precise figure.
+- Caveats: 19 questions (1 question ~ 5 points), one document, one run per config. Read the
+  result as "about 90-95% recall@5 on a 19-question hand-written set", not a precise figure.
 - The single miss in config c: "Why does the review argue that current fall risk assessment
   tools are insufficient, and what direction does it recommend for future development?"
   (a multi-chunk "why / what direction" question). Not yet investigated.
