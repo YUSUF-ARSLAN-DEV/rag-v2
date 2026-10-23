@@ -371,9 +371,11 @@
       const data = await res.json();
       if (!res.ok) { bubble.textContent = data.detail || "Something went wrong. Please try again."; return; }
       fillBot(bubble, data.answer, data.reference, data.top_chunks);
-      // the server created a new chat for this first question: remember its id and show it in the sidebar
-      if (data.conversation_id && askedIn === currentConversationId && data.conversation_id !== currentConversationId) {
-        setCurrentConv(data.conversation_id); loadConversations();
+      // the server created a new chat for this first question: ALWAYS refresh the sidebar (it mirrors the server),
+      // but only switch to the new chat if the user is still where they asked (they may have clicked another chat meanwhile)
+      if (data.conversation_id && data.conversation_id !== askedIn) {
+        if (askedIn === currentConversationId) setCurrentConv(data.conversation_id);
+        loadConversations();
       }
     } catch (err) { if (err.message !== "unauthorized") bubble.textContent = "Something went wrong. Please try again."; }
     finally { $("send").disabled = false; $("question").focus(); $("chat").scrollTop = $("chat").scrollHeight; }

@@ -48,7 +48,7 @@ def manual_initialization_pipeline(file_paths, activate_hybrid=False,activate_ch
 #  "source_snippet": "verbatim quote" or ["quote 1", "quote 2", ...]}
 # ---------------------------------------------------------------------------
 
-def eval_set_loader(path="src/test_sets/eval_set_one.json"):
+def eval_set_loader(path="test_sets/eval_set_one.json"):
     questions = []
     n_question = 0 
     with open(path, "r", encoding="utf-8") as f:
