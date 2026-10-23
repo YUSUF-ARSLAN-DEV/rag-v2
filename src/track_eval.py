@@ -2,7 +2,7 @@ import mlflow
 from pipelines import evaluate_recall_at_5
 from config import (chunk_size, overlap_size, c_rff_value, index_dimension)
 
-mlflow.set_experiment("rag-retrieval") # this is us creating an experiement in ml flow
+mlflow.set_experiment("rag-retrieval-2") # this is us creating an experiement in ml flow
 
 # the grid: each dict is one run. run from the repo root: python src/track_eval.py
 configs = [
@@ -16,7 +16,7 @@ configs = [
 for cfg in configs :
     switches = {k: v for k, v in cfg.items() if k != "name"}
     with mlflow.start_run(run_name=cfg["name"]) :
-        results = evaluate_recall_at_5(99, **switches)
+        results = evaluate_recall_at_5(6, **switches)
         mlflow.log_params({**switches,
                            "chunk_size":chunk_size,
                            "overlap_size":overlap_size,

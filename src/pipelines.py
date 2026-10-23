@@ -48,7 +48,7 @@ def manual_initialization_pipeline(file_paths, activate_hybrid=False,activate_ch
 #  "source_snippet": "verbatim quote" or ["quote 1", "quote 2", ...]}
 # ---------------------------------------------------------------------------
 
-def eval_set_loader(path="test_sets/eval_set_one.json"):
+def eval_set_loader(path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_sets", "eval_set_one.json")):   # anchored on this file, not on the folder you run from
     questions = []
     n_question = 0 
     with open(path, "r", encoding="utf-8") as f:
@@ -268,7 +268,7 @@ def answer_question( question, user_id , pool ,documents_id=None, history = None
     
     
 
-def evaluate_recall_at_5(user_id=999 , **retrieval_switches):  # switches: use_bm25, use_rerank, top_k
+def evaluate_recall_at_5(user_id=6 , **retrieval_switches):  # switches: use_bm25, use_rerank, top_k
     # recall@5 = fraction of answerable questions whose gold snippet(s) appear in the top-5 retrieved chunks
     # runs directly (not through the API) against the SAME Postgres data and retrieval code the API uses
     question_set , _ = eval_set_loader()  # list of dicts, one per question

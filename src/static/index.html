@@ -198,6 +198,7 @@
     $("auth-submit").textContent = m === "login" ? "Sign in" : "Create account";
     $("password").autocomplete = m === "login" ? "current-password" : "new-password";
     setMsg($("auth-msg"), "");
+    $("username").value = ""; $("password").value = "";   // switching tabs starts with empty boxes
   }
   $("tab-login").onclick = () => setMode("login");
   $("tab-register").onclick = () => setMode("register");
