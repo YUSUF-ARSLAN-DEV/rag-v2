@@ -49,16 +49,3 @@ def chunk(text ,user_id ,  chunk_size = 200  , overlap = 50,test_paths = file_pa
 
 # now we have chunks for various files basically batch operation 
 
-
-# saving the chunks as JSOn 
-
-
-def read_chunks(file_path=None):
-    if file_path is None:
-        print("Please provide the name of the chunks file that you want to read ")
-        file_path = input("please paste your file path here").strip()
-    final = "chunk_lists/" + file_path
-    clean = final.strip('"')  # Remove any surrounding quotes
-    with open(clean,"r",encoding="utf-8") as f :
-        chunks = json.load(f)
-        return chunks 
