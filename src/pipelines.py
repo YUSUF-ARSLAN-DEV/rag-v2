@@ -11,7 +11,6 @@ from db import hash_text , get_user_chunks  , search_user_vectors , create_pool 
 from embedder import fais_chunks_embedder, populate_index, embed_question, build_bm25_index, bm25_search , RFF_TOP_PICKS  , reranker
 from document_loader import load_document
 from config import chunk_size, overlap_size, file_paths , activate_hybrid_embedding , hybdrid_embedding_top_k , activate_rerank
-from evaluate import reading_the_golden_set
 from model  import askQuestionToAI ,ask_AI_TO_EVALUTE_RESPONSE , ask_CLAUDE_TO_EVALUATE_RESPONSE ,askQuestionToClaude , askQuestionToLLM , rewrite_question
 import tempfile 
 
@@ -23,14 +22,6 @@ def manual_initialization_pipeline(file_paths, activate_hybrid=False,activate_ch
     text_string = load_document(file_paths)
     chunks = chunk(text_string, chunk_size, overlap_size, file_paths)
 
-    if activate_chunk_enhancement : 
-         t_start = time.time()
-         for i in range(len(chunks)):
-            t0 = time.time()
-            chunks[i]["text"] = enhancing_chunks(chunks[i], text_string) + " " + chunks[i]["text"] 
-            dt = time.time() - t0
-            elapsed = time.time() - t_start
-            print(f"[enhancement] chunk {i+1}/{len(chunks)} done in {dt:.1f}s | total {elapsed:.1f}s", flush=True)
 
     # bm25 is built once here (ingest time) from chunks only - querying it with an
     # actual question happens later, per-question, via bm25_search(bm25, question).
@@ -69,60 +60,6 @@ def eval_set_loader(path=os.path.join(os.path.dirname(os.path.abspath(__file__))
 # Both `ask_fn` and `judge_fn` must match askQuestionToAI / ask_AI_TO_EVALUTE_RESPONSE's
 # signatures and return shapes (see model.py).
 # ---------------------------------------------------------------------------
-
-def run_generation_eval(ask_fn, judge_fn, label, limit=None):
-    questions_embed, index, contexts, question_list, expected_answers, impossibles = reading_the_golden_set(False)
-    faithful = not_faithful = correct = not_correct = 0
-    question_count = 0
-    rows = []
-
-    for zindex, question in enumerate(questions_embed):
-        if limit is not None and zindex >= limit:
-            break
-
-        _, indices = index.search(question.reshape(1, -1), k=1)
-        # did the correct chunk get retrieved? (string fallback: SQuAD reuses paragraphs across questions)
-        retrieval_hit = indices[0][0] == zindex or contexts[indices[0][0]] == contexts[zindex]
-        context_piece = contexts[indices[0][0]]
-        question_text = question_list[zindex]
-        q_stack = [context_piece, question_text]
-
-        response, client, model_name, refrence_text, question_text = ask_fn(q_stack)
-        print(f"[{label}] answered question {question_count}")
-
-        is_faithful, is_correct, reasoning, was_answered = judge_fn(
-            response, client, model_name, refrence_text, question_text, expected_answers[zindex])
-        if is_faithful is None or is_correct is None:
-            print(f"[{label}] judge returned nothing usable:\n{reasoning}")
-            continue
-        print(f"[{label}] evaluated question {question_count} -> {reasoning}")
-
-        if is_faithful:
-            faithful += 1
-        else:
-            not_faithful += 1
-        if is_correct:
-            correct += 1
-        else:
-            not_correct += 1
-        question_count += 1
-
-        try:
-            model_answer_text = json.loads(response)["answer"]
-        except Exception:
-            model_answer_text = response
-
-        # rows let us cross-tabulate: does the RAG hit when it's faithful, or is it
-        # unfaithful despite hitting, or unfaithful because it missed retrieval?
-        rows.append({
-            "question_index": zindex, "hit": retrieval_hit, "faithful": bool(is_faithful),
-            "is_impossible": impossibles[zindex], "Answered": bool(was_answered),
-            "question_text": question_text, "context": context_piece, "model_answer": model_answer_text,
-            "expected_answer": expected_answers[zindex], "reasoning": reasoning,
-        })
-
-    print_scorecard(label, rows, faithful, not_faithful, correct, not_correct)
-    return rows
 
 
 def print_scorecard(label, rows, faithful, not_faithful, correct, not_correct):
