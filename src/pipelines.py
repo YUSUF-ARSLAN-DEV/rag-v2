@@ -10,27 +10,13 @@ from timing import timed , log_timings
 from db import hash_text , get_user_chunks  , search_user_vectors , create_pool ,conn_string , add_message 
 from embedder import fais_chunks_embedder, populate_index, embed_question, build_bm25_index, bm25_search , RFF_TOP_PICKS  , reranker
 from document_loader import load_document
-from config import chunk_size, overlap_size, file_paths , activate_hybrid_embedding , hybdrid_embedding_top_k , activate_rerank
-from model  import askQuestionToAI ,ask_AI_TO_EVALUTE_RESPONSE , ask_CLAUDE_TO_EVALUATE_RESPONSE ,askQuestionToClaude , askQuestionToLLM , rewrite_question
+from config import chunk_size, overlap_size, activate_hybrid_embedding , hybdrid_embedding_top_k 
+from model  import askQuestionToLLM , rewrite_question
 import tempfile 
 
 # ---------------------------------------------------------------------------
 # Interactive RAG pipeline (ask a question about a real document you loaded)
 # ---------------------------------------------------------------------------
-
-def manual_initialization_pipeline(file_paths, activate_hybrid=False,activate_chunk_enhancement=False ):  # chunk and embed from scratch every time
-    text_string = load_document(file_paths)
-    chunks = chunk(text_string, chunk_size, overlap_size, file_paths)
-
-
-    # bm25 is built once here (ingest time) from chunks only - querying it with an
-    # actual question happens later, per-question, via bm25_search(bm25, question).
-    bm25 = build_bm25_index(chunks) if activate_hybrid else None
-    embeddings = fais_chunks_embedder(chunks)
-    index = populate_index(embeddings)
-
-    return index, chunks, bm25  # bm25 is None when activate_hybrid=False - always 3 values
-
 
 # ---------------------------------------------------------------------------
 # Hand-written eval set (eval_set_one.json) — one JSON object per line, e.g.:
@@ -92,17 +78,6 @@ def diagnose_hallucinations(rows):
         print(f"CONTEXT       :\n{r['context']}\n")
 
 
-def main():
-    local = os.getenv("ASKLOCAL", "false").strip().lower() == "true"
-    ask_fn = lambda q_stack: askQuestionToAI(q_stack, local)
-    return run_generation_eval(ask_fn, ask_AI_TO_EVALUTE_RESPONSE, label="QWEN")
-
-
-def Checking_claude(limit=None):
-    # limit=N caps the run to the first N questions - keeps API spend small while testing.
-    rows = run_generation_eval(askQuestionToClaude, ask_CLAUDE_TO_EVALUATE_RESPONSE, label="CLAUDE", limit=limit)
-    diagnose_hallucinations(rows)
-    return rows
 
 def normalize_for_match(text):
     # PDF text carries hyphenation ("moni- toring"), curly quotes and markup noise that the
@@ -116,31 +91,6 @@ def snippets_hit(snippets, texts):
         snippets = [snippets]
     normalized_texts = [normalize_for_match(t) for t in texts]
     return all(any(normalize_for_match(s) in t for t in normalized_texts) for s in snippets)
-
-
-def testing_chunk_sanity():
-    text_list = load_document(file_paths)
-    chunks = chunk(text_list)
-    eval_set = eval_set_loader()
-    absolute_existence = 0
-    for question in eval_set:
-        if snippets_hit(question["source_snippet"], [c["text"] for c in chunks]):
-            absolute_existence += 1
-        else:
-            print("MISSING:", question["question"])
-    print(f"{absolute_existence}/{len(eval_set)} snippets exist in chunks")
-
-
-
-def build_index(file_paths):
-    if not isinstance(file_paths, list):
-        file_paths = [file_paths]
-    text = load_document(file_paths)
-    chunks = chunk(text, chunk_size, overlap_size, file_paths)
-    faiss_embedded = fais_chunks_embedder(chunks)
-    faiss_index = populate_index(faiss_embedded)
-    bm25 = build_bm25_index(chunks)
-    return faiss_index, chunks, bm25
 
 
 def ask_question_phase1(question, user_id , pool , timings , eval_mode=False ,

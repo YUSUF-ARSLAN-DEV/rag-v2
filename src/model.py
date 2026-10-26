@@ -2,7 +2,6 @@ from openai import OpenAI, InternalServerError, RateLimitError, APIConnectionErr
 from document_loader import load_document
 import time
 import anthropic
-from config import enhancement_source_file_path ,base_url
 from dotenv import load_dotenv
 import os
 import json
@@ -37,7 +36,7 @@ def get_claude_client():
 def get_client(local=False):
     if local:
         client = OpenAI(
-            base_url=base_url,
+            base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
             api_key="ollama"
         )
     else:
@@ -219,7 +218,7 @@ def askQuestionToClaude(q_stack, local=False):  # local kept for signature parit
 # Env: GEMINI_API_KEY (required), GEMINI_MODEL (optional, pick a cheap "flash" model).
 # ---------------------------------------------------------------------------
 
-GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+GEMINI_BASE_URL = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
 
 def _gemini_model_list():
     # GEMINI_MODELS="gemini-3.5-flash,gemini-3.5-flash-lite" = try them in this order.
@@ -354,33 +353,6 @@ def ask_CLAUDE_TO_EVALUATE_RESPONSE(response , client , model_name , refrence_te
 
 
  # since it returns a list lof string not simply one string 
-
-def enhancing_chunks(chunk,doc_text,file_path=enhancement_source_file_path ,claude_mode = False ):
-    enhancment_schema = define_LLM_EVALUATION_SCHEMA(2)
-
-    if claude_mode == True:    
-        user_prompt = [
-            {"type": "text", "text": f"Here is the full DOCUMENT for context:\n{doc_text[0]}", "cache_control": {"type": "ephemeral"}},
-            {"type": "text", "text": f"---\n\nHere is the specific CHUNK...\n{chunk['text']}\n\nWrite the blurb now."}
-        ]
-    else :
-        user_prompt = f"Here is the full DOCUMENT for context:\n{doc_text[0]}\n\n---\n\nHere is the specific CHUNK...\n{chunk['text']}\n\nWrite the blurb now."    
-
-
-    enhancement_system_prompt = "You are given a full document and one chunk extracted from it. Write a short blurb (1-2 sentences) that situates this chunk within the document - what section or topic it is from, with any vague references (like 'this study' or 'the program') resolved using information elsewhere in the document. The purpose is to make the chunk easier to find in a search index when it actually contains the answer to a question. Use only information explicitly stated in the document - do not guess or add outside knowledge. Do not summarize or repeat the chunk's own content."
-
-    if claude_mode == True :
-        client = get_claude_client() 
-        response = _claude_structured_call(client ,enhancement_system_prompt, user_prompt , enhancment_schema , "submit_chunk_context") 
-    else : 
-        response = openAICompatibleAPI_structured_call(enhancement_system_prompt,user_prompt)
-
-    if claude_mode == True :
-        return response["context_blurb"]
-    else : 
-        blurb_dict = json.loads(response)
-    return blurb_dict["context_blurb"]
-
 
 def openAICompatibleAPI_structured_call(system_prompt, user_prompt ):
     client  = get_client()

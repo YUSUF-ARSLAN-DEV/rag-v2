@@ -1,8 +1,5 @@
-import tiktoken 
-from config import * 
-import os 
-from config import *
-import json 
+import tiktoken
+import json
 
 encoder = tiktoken.get_encoding("cl100k_base") 
 
@@ -13,7 +10,7 @@ encoder = tiktoken.get_encoding("cl100k_base")
 #  and the value is the chunked text
 
 
-def chunk(text ,user_id ,  chunk_size = 200  , overlap = 50,test_paths = file_paths) :
+def chunk(text ,user_id ,  chunk_size = 200  , overlap = 50) :
     # text is a list of strings where each string represents a documentq 
 
     
@@ -30,7 +27,6 @@ def chunk(text ,user_id ,  chunk_size = 200  , overlap = 50,test_paths = file_pa
 
     # so that the overlap actually applies 
     for id , token_list  in enumerate(tokens_list) : # list is not an index but an actual list of tokens for a file 
-        source = os.path.basename(test_paths[id])  # get the file name from the path
         for i in range(0,len(token_list) ,step_size) : # we do not care about the value
             chunk = token_list[i:i+chunk_size ] # numbers aka tokens
             chunk = encoder.decode(chunk) # reverts this bunch of tokens back to a string 
@@ -39,7 +35,6 @@ def chunk(text ,user_id ,  chunk_size = 200  , overlap = 50,test_paths = file_pa
                 "id":"source_paragraph"+str(id)+"chunk_"+str(i)+"__"+str(i+chunk_size),    # unique id for each chunk
                 "text": chunk, 
                 "start_token":i, 
-                "source":source ,
                 "token_count": len( token_list[i:i+chunk_size ] )  # actual slice length
             }
 
