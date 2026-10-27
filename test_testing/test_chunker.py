@@ -15,7 +15,8 @@ def doc_400():
 
 @pytest.mark.parametrize("n_tokens, expected_chunks", [
     (100, 1),   # shorter than one chunk -> one chunk
-    (200, 2),   # current behaviour: starts at 0 and 150, so the last 50 tokens appear twice
+    (200, 1),   # exactly one chunk long -> one chunk, no duplicate tail chunk
+    (350, 2),   # starts at 0 and 150; the second chunk reaches the end, so we stop there
     (400, 3),   # starts at 0, 150, 300 (step = 200 - 50)
 ])
 def test_chunk_count_and_max_size(n_tokens, expected_chunks):
