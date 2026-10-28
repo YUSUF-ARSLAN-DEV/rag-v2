@@ -37,9 +37,9 @@ def chunk(text ,user_id ,  chunk_size = 200  , overlap = 50) :
                 "start_token":i, 
                 "token_count": len( token_list[i:i+chunk_size ] )  # actual slice length
             }
-
-
             chunks.append(chunk_dict)  # appending the chunk to the list of chunks
+            if i +chunk_size >= len(token_list) :  # the chunk already added already reaches the end of the document so stop
+                break
     return chunks       # a list of of lists 
 
 # now we have chunks for various files basically batch operation 
