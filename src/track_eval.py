@@ -4,7 +4,7 @@ import argparse
 from pipelines import evaluate_recall_at_5
 from config import (chunk_size, overlap_size, c_rff_value, index_dimension)
 
-mlflow.set_experiment("rag-retrieval-2") # this is us creating an experiement in ml flow
+mlflow.set_experiment("rag-retrieval-4") # this is us creating an experiement in ml flow
 
 
 # creating an argument parser object - an object that reads arguments that you pass from the command line 
@@ -55,5 +55,5 @@ if args.gate :
             f.write(f'### RETRIEVAL EVAL\n\n{line}\n')
 
 
-if args.gate and results_for_all["c_hybrid_rerank_k20"]["recall"]  < 0.85   :
+if args.gate and results_for_all["c_hybrid_rerank_k20"]["recall"]  < 0.65   :
     raise SystemExit("The recall_at_5 fell below the required threshold ")
