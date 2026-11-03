@@ -4,8 +4,10 @@ A multi-user Retrieval-Augmented Generation (RAG) service built with an eval-fir
 every retrieval change is judged by a number on a hand-written eval set, never on vibes. Users
 register, upload documents, and chat with them in a browser UI; conversations are stored in
 Postgres and follow-up questions work. It runs as a FastAPI service in Docker, stores documents
-in Postgres + pgvector, and tracks every retrieval experiment in MLflow. This README also records
-what didn't work and what is still open.
+in Postgres + pgvector, and tracks every retrieval experiment in MLflow. Every push and pull
+request runs the unit tests and a retrieval eval in GitHub Actions, and the eval fails the build
+if recall@5 drops below a threshold. This README also records what didn't work and what is still
+open.
 
 ## Architecture
 
@@ -18,6 +20,9 @@ ask:     question (+ last 3 turns of the chat, loaded by the server)
               -> RRF fusion -> cross-encoder rerank -> top 5 chunks -> LLM answer
               -> user + assistant messages saved to the conversation
 eval:    retrieval recall@5 through the same Postgres code path; every config logged to MLflow
+CI:      on every push and PR: unit tests, then a fresh Postgres + pgvector service container,
+              seed the eval document, run recall@5 on the production config, report it with a
+              95% bootstrap interval, fail below the threshold
 ```
 
 ### Code map
@@ -35,8 +40,19 @@ eval:    retrieval recall@5 through the same Postgres code path; every config lo
   and question rewrite) retry each model with a growing pause, then fall back to the next model.
 - `src/static/index.html` — the single-page UI (no framework): sign in / create account, upload,
   document picker, chat, conversation sidebar. Served by FastAPI at `/`.
-- `src/track_eval.py` — runs the retrieval grid and logs each config as an MLflow run.
-- `src/timing.py` — per-stage timings written to the container log (logger `rag.timing`).
+- `src/track_eval.py` — runs the retrieval eval. Without flags: the full a–e grid, each config
+  logged as an MLflow run. With `--gate` (used in CI): only the production config, a 95% bootstrap
+  interval written to the job summary, and exit code 1 if recall@5 is below the threshold.
+- `src/seed_eval.py` — creates the schema and an eval user in an empty database, uploads the eval
+  document through the same `processing_file_uploads` path as real uploads, and prints the user id.
+- `src/check_overlap.py` — checks a draft of new eval questions: flags any question that shares
+  3+ consecutive words with the paper, and any `source_snippet` not found in the PDF text.
+- `src/test_sets/` — the eval document (`wf.pdf`) and its questions (`eval_set_one.json`, one
+  JSON object per line), kept side by side so anyone can reproduce the eval.
+- `src/timing.py` — per-stage timings written to the log (logger `rag.timing`).
+- `test_testing/` — pytest unit tests (chunker, `snippets_hit`, RRF, auth); `conftest.py` sets a
+  throwaway `JWT_SECRET` and fakes `sentence_transformers` so the tests run fast and offline.
+- `.github/workflows/ci.yml` — the CI workflow: jobs `runn_test` and `runn_eval`.
 - `Dockerfile` + `docker-compose.yml` — `api` (port 8003) and `db` (`pgvector/pgvector:pg16`)
   with persistent volumes for Postgres data and the HuggingFace model cache.
 
@@ -100,43 +116,53 @@ retrieval (the LLM calls a search tool). Rewriting was the cheapest fit for this
 | Auth (register, login, JWT) and per-user isolation | Done |
 | Web UI: login, upload, document picker, chat | Done |
 | Conversations + chat memory (sidebar, follow-up questions) | Done |
-| Cloud deployment (Azure) | Not started (budget-blocked, prep next) |
+| Unit tests (pytest) run in CI on every push and PR | Done |
+| CI-gated retrieval eval (Postgres service container, threshold, bootstrap interval) | Done |
+| Eval set grown from 19 to 44 answerable questions | Done |
+| Branch protection (eval required before merging) | Next |
+| Cloud deployment (Azure) | Not started (prep next) |
 | GPU passthrough for the embedder/reranker | Deferred (not useful for a CPU deployment) |
-| CI-gated eval | Not started |
 
 ## Results
 
-### Retrieval quality (MLflow, Postgres + pgvector, 19 answerable questions)
+### Retrieval quality (MLflow, Postgres + pgvector, 44 answerable questions)
 
-Eval set: `src/test_sets/eval_set_one.json`, hand-written from a nursing-home fall-risk
-research paper. 22 questions, 3 are unanswerable and skipped, leaving 19. recall@5 counts a
-question as a hit when every required gold snippet appears in the top-5 retrieved chunks.
-Each config is one run (`src/track_eval.py`).
+Eval set: `src/test_sets/eval_set_one.json`, written from a nursing-home fall-risk research paper
+(`src/test_sets/wf.pdf`). 52 questions; 8 are unanswerable and skipped, leaving 44. recall@5
+counts a question as a hit when every required gold snippet appears in the top-5 retrieved
+chunks. Each config is one run (`python src/track_eval.py --user-id <id>`), measured 2026-11-03.
 
 | Config | recall@5 | Hits |
 |---|---|---|
-| a) vector only, top_k 20 | 63.2% | 12/19 |
-| b) vector + BM25 (RRF), no rerank, top_k 20 | 68.4% | 13/19 |
-| c) vector + BM25 + rerank, top_k 20 (**current**) | **94.7%** | 18/19 |
-| d) vector + BM25 + rerank, top_k 10 | 78.9% | 15/19 |
-| e) vector + BM25 + rerank, top_k 40 | 94.7% | 18/19 |
+| a) vector only, top_k 20 | 59.1% | 26/44 |
+| b) vector + BM25 (RRF), no rerank, top_k 20 | 65.9% | 29/44 |
+| c) vector + BM25 + rerank, top_k 20 (**current**) | **72.7%** | 32/44 |
+| d) vector + BM25 + rerank, top_k 10 | 70.5% | 31/44 |
+| e) vector + BM25 + rerank, top_k 40 | 68.2% | 30/44 |
 
-![MLflow run comparison](docs/mlflow_compare.png)
+**95% bootstrap interval for config c: [59.1%, 86.4%]** (10,000 resamples of the 44 per-question
+hits and misses, seeded). CI reports the same interval on every run's Summary page.
 
-- Reranking is the big lever: +5 questions over b.
-- BM25 over vector-only is +1 question, within noise on this set.
-- Widening the candidate pool from 20 to 40 adds nothing; shrinking it to 10 costs 3 questions.
-- Re-running the whole grid gave identical numbers, so retrieval is deterministic.
-- **Regression check after adding conversations and memory:** re-run on 2026-10-23, config c
-  still 94.7% (18/19), so the `/ask` changes did not touch retrieval quality.
-- Caveats: 19 questions (1 question ~ 5 points), one document, one run per config. Read the
-  result as "about 90-95% recall@5 on a 19-question hand-written set", not a precise figure.
-- The single miss in config c: "Why does the review argue that current fall risk assessment
-  tools are insufficient, and what direction does it recommend for future development?"
-  (a multi-chunk "why / what direction" question). Not yet investigated.
+- **The original 19 questions still score 18/19; the 25 new ones score 14/25.** Nothing in the
+  pipeline changed. The new questions are paraphrased the way a non-expert would ask, and that
+  exposed a weakness the original set hid.
+- **Most misses are vocabulary mismatch.** The question and the paper use different words for the
+  same thing: "gadgets and apps" vs "digital technologies", "managers' backing" vs "leadership
+  commitment", "senior nurses with extra qualifications" vs "nurse practitioners". BM25 has no
+  shared words to match, and the dense embedder has to bridge every synonym on its own.
+- **The ordering a < b < c still holds:** BM25 helps over vector-only, and reranking helps most.
+- **top_k 10, 20 and 40 are tied.** They differ by one or two questions, well inside the
+  ±13-point interval, so this set can't separate them.
+- Caveats: one document, one run per config. Some new questions are paraphrased harder than a
+  real user would ask (the generation prompt forbade the paper's own terms), so real-user recall
+  is likely somewhere between this result and the original set's.
 
-*Earlier baseline (in-memory FAISS, 22 questions including the 3 unanswerable ones): hit@5 =
-90.9% (20/22). Different denominator, so it is not a like-for-like comparison.*
+*Earlier result (2026-10-23, the original 19 questions): config c 94.7% (18/19), vector-only
+63.2%, BM25 hybrid 68.4%, top_k 10 78.9%, top_k 40 94.7%. The single miss was the multi-chunk
+question "Why does the review argue that current fall risk assessment tools are insufficient,
+and what direction does it recommend for future development?", and it still misses.
+`docs/mlflow_compare.png` shows that earlier grid. An even earlier in-memory FAISS baseline
+scored hit@5 = 90.9% (20/22) with a different denominator, so it is not comparable.*
 
 ### Latency per `/ask` query
 
@@ -151,28 +177,42 @@ reranker, one run each (not averaged).
 | total | ~59 s | 7.8 s |
 
 The LLM call dominates end-to-end latency; retrieval is cheap. Uploading an 87-chunk document
-takes ~63 s on CPU (embedding), a one-time cost per document that I accepted for v1; a smaller
-embedding model or background embedding would reduce it. Hosted Gemini sends retrieved chunks
-to Google; Ollama remains the private/local option.
+took ~63 s on CPU (embedding) at the time, a one-time cost per document that I accepted for v1; a
+smaller embedding model or background embedding would reduce it. On a GitHub Actions runner the
+eval document (96 chunks with the current loader and chunker) takes ~82 s to embed. Hosted
+Gemini sends retrieved chunks to Google; Ollama remains the private/local option.
 
 A single later run on a hosted Gemini model (2026-10-20): embed 0.5 s, rerank 2.4 s, LLM 12.4 s,
 total 15.4 s. LLM latency varies a lot run to run. The rewrite step adds one more LLM call to
 follow-up questions only; its added latency has not been measured yet.
 
-### Generation quality (SQuAD v2, 100 Q, earlier pipeline)
+### Generation quality (SQuAD v2, 100 Q, earlier pipeline — historical)
 
 | Backend | Faithfulness | Accuracy | Hallucinated-on-impossible | False-refusal-on-answerable |
 |---|---|---|---|---|
 | qwen3-coder-30b | 88% | ~67% | 23/55 (42%, ~7% once judge/label noise is separated out) | 6/45 (13%) |
 | Claude Sonnet 5 | 96% | 76% | 11/55 (20%, ~7% real fabrication after the same correction) | 9/45 (20%) |
 
-Measured before the move to Postgres and not re-run since. SQuAD was used to debug the
-harness, not to tune retrieval.
+Measured before the move to Postgres. The harness that produced these numbers ran on an
+in-memory FAISS index, not the real pipeline, and was removed in the 2026-10-24 cleanup, so
+these numbers can't be reproduced from the current code. SQuAD was used to debug the harness,
+not to tune retrieval.
 
 ## Testing
 
-Besides the retrieval eval, the conversations feature was tested by hand against a public
-benchmark document (llmware `rag_instruct_benchmark_tester`, 200 passages loaded as one file):
+**Automated (GitHub Actions, `.github/workflows/ci.yml`), on every push and pull request:**
+
+- `runn_test` — pytest unit tests in `test_testing/`: chunk sizes, starts and overlap (including
+  the edge case that found the duplicate-tail bug below), `snippets_hit` normalization
+  (case, punctuation and PDF hyphenation), RRF ordering and limits, password hashing, and JWT
+  expiry and forged-signature rejection.
+- `runn_eval` — starts a `pgvector/pgvector:pg16` service container with a health check, seeds
+  it with `seed_eval.py`, runs `track_eval.py --gate`, writes recall@5 and its bootstrap interval
+  to the run's Summary page, and fails if recall@5 is below 0.65 (the 44-question baseline,
+  0.727, minus about three questions).
+
+**By hand**, the conversations feature was tested against a public benchmark document (llmware
+`rag_instruct_benchmark_tester`, 200 passages loaded as one file):
 
 - **Answers and refusals:** an answerable question returned the right value with its source;
   a question whose answer isn't in the document was refused.
@@ -190,6 +230,18 @@ benchmark document (llmware `rag_instruct_benchmark_tester`, 200 passages loaded
 
 ## Key findings
 
+- **A small, self-written eval set can flatter the system.** The original 19 questions largely
+  reused the paper's wording and scored 94.7%. Adding 25 questions phrased in everyday words
+  brought config c to 72.7%, with no code change. The new questions were checked by a script
+  (`check_overlap.py`) for copied phrases and for snippets that exist in the PDF, then reviewed
+  by hand.
+- **Report the interval, not just the point.** With 44 questions, each one is worth about
+  2.3 points, and the 95% bootstrap interval for config c is [59.1%, 86.4%]. Without it, the
+  top_k grid looks like it picks a winner; with it, top_k 10, 20 and 40 are visibly tied.
+- **Tests find bugs that metrics hide.** An edge-case unit test (a document of exactly 200
+  tokens) showed the chunker emitted a second chunk made entirely of tokens already in the
+  first. The fix stops once a chunk reaches the end of the document; recall@5 on the original
+  set was unchanged (18/19) after re-chunking.
 - **A metric bug can look exactly like a real result.** A whitespace mismatch between
   PDF-extracted text and hand-typed snippets gave a 0% hit rate, then a strict substring
   match still under-counted (hyphenation, curly quotes). The fix was a normalized comparison
@@ -200,6 +252,10 @@ benchmark document (llmware `rag_instruct_benchmark_tester`, 200 passages loaded
 - **"Hallucination on impossible questions" needed splitting by faithfulness.** Most such
   answers were grounded in the context and only disagreed with an overly strict label; the
   naive metric overstated hallucination ~3x.
+- **CI catches "works on my machine".** The first CI eval run failed because `mlflow` was
+  installed in the local venv but missing from `requirements.txt`. A later run failed because a
+  direct push to `master` silently put the threshold back from 0.65 to 0.85 — a change a pull
+  request diff would have shown.
 - **Moving state into Postgres broke the eval harness** (it read JSON files from disk). It now
   reads through the psycopg pool and uses the same retrieval code as the API.
 - **Relative paths depend on where you launch from.** Running the eval from `src/` created a
@@ -220,15 +276,26 @@ benchmark document (llmware `rag_instruct_benchmark_tester`, 200 passages loaded
 
 ## Limitations
 
-- **Tiny eval set, single document.** 19 answerable questions on one academic paper; results
-  may not generalize to other document types. Follow-up retrieval with and without the rewrite
-  step has not been evaluated.
+- **Small eval set, single document.** 44 answerable questions on one academic paper; results
+  may not generalize to other document types. Some new questions are paraphrased harder than
+  real users would ask. Follow-up retrieval with and without the rewrite step has not been
+  evaluated.
+- **No held-out test set.** All 44 questions are used for reporting; tuning retrieval against
+  them would overfit. A separate, untouched set is needed before any tuning.
+- **Misses are not yet diagnosed per question.** It isn't known yet whether the gold chunk for
+  each miss falls outside the top 20 candidates (a first-stage problem) or is dropped by the
+  reranker.
 - **Chunking is naive.** Fixed 200-token windows with 50 overlap, no sentence or paragraph
   awareness. Its measured impact is unknown.
 - **PDF and DOCX extraction artifacts.** Line-break hyphenation hurts BM25 tokenization. DOCX
   table text is appended after the paragraphs, flattened, and merged cells can repeat, so a
   label in a table (e.g. "Week 9") can end up far from the entries it describes.
-- **CPU-only embedder and reranker** in the container; uploads are slow (~63 s for 87 chunks).
+- **CPU-only embedder and reranker** in the container; uploads are slow (~63 s for 87 chunks
+  locally, ~82 s on a CI runner).
+- **Heavy image and slow CI.** `torch` from PyPI on Linux is the CUDA build (several GB), which
+  makes the Docker image large and the CI eval job take 6–10 minutes, mostly downloads. The
+  Hugging Face models are not cached between CI runs.
+- **`timing.py` logs to stdout**, so CI captures the seed script's user id with `tail -n 1`.
 - **Memory is query rewriting only.** The answer prompt doesn't see the chat, history is capped
   by turn count (3) but not by length, and a rewrite that is wrong sends retrieval the wrong way.
 - **One request at a time in the UI.** Send is disabled while any answer is loading, and tabs
@@ -237,12 +304,12 @@ benchmark document (llmware `rag_instruct_benchmark_tester`, 200 passages loaded
 - **Latency numbers are single runs** and the exact Gemini model id was not recorded.
 - **BM25 candidate count is fixed** by `hybdrid_embedding_top_k` in `config.py`; the `top_k`
   switch only changes the vector search and the fused list.
-- **LLM-judge noise was never quantified**, and generation eval has not been re-run against
-  the real document or the Postgres pipeline.
+- **No current generation eval.** The SQuAD numbers above are historical; answer quality on the
+  real document through the Postgres pipeline has not been measured.
 - **Security hardening before a public deploy:** the compose file publishes Postgres on port
   5432, the app connects as the `postgres` superuser, and secrets live in a local `.env`.
   There is no rate limiting, and the delete confirmation uses the browser's built-in dialog.
-- Not yet deployed; no CI gate.
+- **Not yet deployed.** `master` isn't protected yet, so a red check doesn't block a merge.
 
 ## Setup and running
 
@@ -275,21 +342,42 @@ Use `127.0.0.1`, not `localhost`, on Windows (IPv6 resolution hangs). See `src/c
 chunking and retrieval parameters. The local Ollama option needs Ollama running on your machine
 with the `qwen3.5:9b` model pulled.
 
-Run the retrieval experiments from the repo root, with the eval document uploaded under a
-dedicated eval account (pass that account's `user_id` in `src/track_eval.py`):
+### Running the retrieval eval locally
+
+Only the database is needed, not the API. From the repo root:
 
 ```bash
-python src/track_eval.py         # logs the a-e grid to MLflow
-mlflow ui --port 5000            # run from the same directory; open http://127.0.0.1:5000
+docker compose up -d db                              # Postgres only
+python src/seed_eval.py                              # once: creates the eval user, uploads wf.pdf, prints the user id
+python src/track_eval.py --user-id <id>              # the full a-e grid, logged to MLflow
+python src/track_eval.py --user-id <id> --gate       # what CI runs: config c only, fails below the threshold
+mlflow ui --port 5000                                # open http://127.0.0.1:5000
+```
+
+Run `seed_eval.py` once per database: a second run fails because the eval user already exists, so
+reuse the id it printed. Each config's missed questions are logged as the MLflow artifact
+`missed_questions.json`.
+
+### Running the unit tests
+
+```bash
+pytest                                               # pytest.ini points at test_testing/ and src/
 ```
 
 ## Roadmap
 
-1. Deployment prep: stop publishing the Postgres port, a least-privilege database role,
+1. Branch protection on `master`: require pull requests and the `runn_test` and `runn_eval`
+   checks before merging.
+2. Deployment prep: stop publishing the Postgres port, a least-privilege database role,
    secrets from the cloud's secret store, a hosted LLM backend (the local Ollama option can't
    be reached from the cloud).
-2. Cloud deployment (Azure): container registry, container app, managed Postgres.
-3. Inspect the one missed eval question (retrieval problem or multi-chunk question?).
-4. Follow-up retrieval eval (rewrite on vs off) logged to MLflow.
-5. Polish: in-app delete dialog, per-chat pending state, DOCX table handling.
-6. Optional: GPU passthrough for the embedder and reranker as a Docker-for-ML exercise.
+3. Cloud deployment (Azure): container registry, container app, managed Postgres.
+4. Diagnose the 12 misses: the rank of each gold chunk in the vector top 20, the BM25 top 20,
+   and after reranking. Then try query expansion (e.g. HyDE) against the vocabulary gap, on a
+   held-out set to avoid overfitting.
+5. CI speed and size: CPU-only torch in the Dockerfile and CI, cache the Hugging Face models
+   between runs, split `requirements.txt` into app and dev (`pytest`, `mlflow`), and move
+   `timing.py` logs to stderr.
+6. Follow-up retrieval eval (rewrite on vs off) logged to MLflow.
+7. Polish: in-app delete dialog, per-chat pending state, DOCX table handling.
+8. Optional: GPU passthrough for the embedder and reranker as a Docker-for-ML exercise.
