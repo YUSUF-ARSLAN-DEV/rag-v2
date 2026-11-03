@@ -13,3 +13,31 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt #installing the packages 
       - run: pytest 
+  runn_eval:
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: actions/checkout@v4 
+      - uses: actions/setup-python@v5 
+        with:
+          python-version: "3.14"
+          cache: pip 
+      - run: pip install -r requirements.txt
+      - run: |
+          USER_ID=$(python src/seed_eval.py)
+          python src/track_eval.py --user-id "$USER_ID" --gate 
+      
+    services:
+      db:
+        image: pgvector/pgvector:pg16 
+        env:
+          POSTGRES_PASSWORD: ci-test-password 
+        ports: 
+          - 5432:5432
+        options: >- 
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s 
+          --health-retries 10 
+    env:
+      POSTGRES_PASSWORD: ci-test-password
+      POSTGRES_HOST: localhost
