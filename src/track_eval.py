@@ -1,4 +1,5 @@
 import mlflow
+import os 
 import argparse 
 from pipelines import evaluate_recall_at_5
 from config import (chunk_size, overlap_size, c_rff_value, index_dimension)
@@ -45,6 +46,13 @@ for cfg in to_run  :
         mlflow.log_dict({"missed_questions":results["missed_questions"]},"missed_questions.json")
     results_for_all[cfg["name"]] = results 
 
+if args.gate : 
+    summary = os.getenv("GITHUB_STEP_SUMMARY") # getting the path for the step file 
+    c = results_for_all["c_hybrid_rerank_k20"]
+    line = f"recall@5 (c_hybrid_rerank_k20): {c['recall']:.3f} ({c['hits']}/{c['answerable_question_count']})"
+    if summary : # meaning if there is actual a file for that stpe 
+        with open (summary , "a"  , encoding="utf-8") as f : # then we actually append a summary to that file 
+            f.write(f'### RETRIEVAL EVAL\n\n{line}\n')
 
 
 if args.gate and results_for_all["c_hybrid_rerank_k20"]["recall"]  < 0.85   :
