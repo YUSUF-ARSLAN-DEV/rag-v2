@@ -63,7 +63,7 @@ def get_user_documents(pool , user_id) :
     return [{"id" :row[0],"filename":row[1]} for row in rows]
 
 
-def hash_text(list_of_strings):
+def hash_text(list_of_strings): # this hashe the contents 
     joined_strings = " ".join(list_of_strings)  # seperator is # do not change or else ahshing chanes 
     encoded = joined_strings.encode("utf-8")
     hashed_content =  hashlib.sha256(encoded).hexdigest() 
