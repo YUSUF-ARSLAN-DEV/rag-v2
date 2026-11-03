@@ -23,7 +23,7 @@ jobs:
           cache: pip 
       - run: pip install -r requirements.txt
       - run: |
-          USER_ID=$(python src/seed_eval.py)
+          USER_ID=$(python src/seed_eval.py | tail -n 1 )
           python src/track_eval.py --user-id "$USER_ID" --gate 
       
     services:
