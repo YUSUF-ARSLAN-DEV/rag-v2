@@ -24,7 +24,7 @@ configs = [
 to_run =  [] 
 if args.gate :
     for o in configs: # itearting the dictionaries
-        if o["name"] == "c_hybrid_rerank_k20" : 
+        if o["name"] == "b_hybrid_no_rerank" : 
             to_run.append(o)
 else : 
     to_run = configs 
