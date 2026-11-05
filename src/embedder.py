@@ -6,7 +6,7 @@ from chunker import chunk
 from config import hybdrid_embedding_top_k  ,c_rff_value
 
 model = SentenceTransformer("BAAI/bge-large-en-v1.5")
-reranker_model = CrossEncoder("BAAI/bge-reranker-base")
+reranker_model = CrossEncoder("BAAI/bge-reranker-v2-m3")
 def fais_chunks_embedder(chunks) :
     # flattening the 2d lists of  tokens
     text_chunks = [c["text"] for c in chunks ] # extract the text from the chunks
