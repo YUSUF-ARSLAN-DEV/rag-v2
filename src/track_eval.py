@@ -84,5 +84,5 @@ if args.gate :
             f.write(f'### RETRIEVAL EVAL\n\n{line}\n')
 
 
-if args.gate and results_for_all["c_hybrid_rerank_k20"]["recall"]  < 0.65   :
+if args.gate and results_for_all["c_hybrid_rerank_k20"]["recall"]  < 0.82   :
     raise SystemExit("The recall_at_5 fell below the required threshold ")
