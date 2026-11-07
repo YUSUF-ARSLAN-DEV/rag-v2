@@ -3,6 +3,35 @@ on:
   push:
   pull_request:
 jobs:
+  runn_integration:
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 20 
+    steps: 
+      - uses: actions/checkout@v4 
+      - uses: actions/setup-python@v5 
+        with:
+          python-version: "3.14"
+          cache: pip # so that we do not load libraries from the itnern every time 
+      - run: pip install -r requirements.txt 
+      - run: pytest -m integration
+    services:
+        db:
+          image: pgvector/pgvector:pg16
+          env: 
+            POSTGRES_PASSWORD : ci-test-password 
+          ports: 
+            - 5432:5432 
+          options: >-
+            --health-cmd "pg_isready -U postgres"
+            --health-interval 5s 
+            --health-timeout 5s 
+            --health-retries 10
+    env:
+       POSTGRES_PASSWORD: ci-test-password      
+       POSTGRES_HOST: localhost
+       JWT_SECRET: lkasjhglekjqhglkewjhrglkejrhwglkjehg2948yt9gbvureasfrku3o97b9274gbv
+          
+
   runn_test:
     runs-on: "ubuntu-latest"
     steps:
@@ -12,7 +41,7 @@ jobs:
           python-version: "3.14"
           cache: pip
       - run: pip install -r requirements.txt #installing the packages 
-      - run: pytest 
+      - run: pytest -m "not integration"
   runn_eval:
     runs-on: "ubuntu-latest"
     steps:
