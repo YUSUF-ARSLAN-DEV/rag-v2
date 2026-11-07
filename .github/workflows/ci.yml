@@ -1,6 +1,5 @@
 name: CI
 on:
-  push:
   pull_request:
 jobs:
   runn_integration:
@@ -44,6 +43,7 @@ jobs:
       - run: pytest -m "not integration"
   runn_eval:
     runs-on: "ubuntu-latest"
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4 
       - uses: actions/setup-python@v5 
